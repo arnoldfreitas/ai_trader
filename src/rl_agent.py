@@ -20,6 +20,43 @@ from tqdm import tqdm_notebook, tqdm
 from collections import deque
 
 class AI_Trader():
+    '''
+    Class Encapsulating all aspects on the RL training process:
+        Agent; Env; Trainer; Reward; Model
+
+    Attributes
+    -----------
+    state_size: int
+        Number of Variables in the state space.
+    window_size: int
+        Time window length for states and actions. #TODO: I assumed, Check if is true.
+    data_path
+        Path to data folder with source-CSV, training history and images.
+    action_space:
+        Number of variables on action space.
+    cols
+        Name of Columns on CSV to be used on train.
+    data: pd.DataFrame
+
+    memory
+        Memory holder of states, actions, rewards.
+    inventory
+        Holds all on-going trade positions.
+    model_name
+        Name of model
+    start_money
+        Initial amount of money available for agent.
+    gamma
+        Discount Factor for predicted futures reward Q(state,action)
+    epsilon
+        Epsilon Greedy Value. Define percentage of random steps while sampling train data.
+    epsilon_final
+        Final Epsilon Greedy Value.
+    epsilon_decay
+        Decay Value for Epsilon Greedy.
+    model
+        TensorFlow Model for RL-Agent
+    '''
   
     def __init__(self, state_size,window_size,start_money=30, action_space=4, model_name="AITrader",data_path='./data',load_model=True):
 
@@ -49,6 +86,13 @@ class AI_Trader():
             self.model=self.model_builder()
 
     def load_model(self):
+        '''
+        Load TensorFlow Model from h5 file. 
+
+        Note
+        ----
+        Set self.epsilon to 0.5
+        '''
         epi_list=[]
         date_list=[] 
         for file in os.listdir(self.data_path+"/Bot/models"):
@@ -62,7 +106,13 @@ class AI_Trader():
         print("model: ai_trade_{}_{} loaded. Eplison set to {}.".format(load_date,load_epi,self.epsilon))
 
     def model_builder(self):
+        '''
+        Make Tensorflow MLP-Model with architecture:
         
+        Returns
+        -------
+        TensorFlow Model
+        '''
         model = keras.models.Sequential([        
             keras.Input(shape=(self.state_size,)),
             keras.layers.Dense(units=64, activation='relu'),
@@ -70,17 +120,42 @@ class AI_Trader():
             keras.layers.Dense(units=64, activation='relu'),
             keras.layers.Dense(units=self.action_space, activation='linear')
             ])
+        #TODO: Make learning-rate changeable.
         model.compile(loss='mse', optimizer=tf.keras.optimizers.Adam(learning_rate=0.001))
         return model
 
     def trade(self, state):
-      if random.random() <= self.epsilon:
-          return random.randrange(self.action_space)
+        '''
+        Performs Trade action from an given state. Uses epsilon greedy method or model.predict to define action.
+        
+        Returns
+        -------
+        Computed actions
+        '''
+        if random.random() <= self.epsilon:
+            return random.randrange(self.action_space)
       
-      actions = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0)
-      return np.argmax(actions)
+        actions = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0)
+        return np.argmax(actions)
     
     def batch_train(self, batch_size):
+        '''
+        Fit model to batch of batch_size
+
+        Notes
+        -----
+        Following DQN Algorithm the reward decay  (gamma) is used in this function to define future rewards.
+
+        Parameters
+        ----------
+        batch_size : int
+            Size of Batch to be use on model.fit
+        
+        Returns
+        -------
+        reults : 
+            Tensorflow Training History
+        '''
         batch = []
         for i in range(len(self.memory) - batch_size + 1, len(self.memory)):
             batch.append(self.memory[i])
@@ -101,6 +176,29 @@ class AI_Trader():
         return result
     
     def state_creator(self,data,windowed_money, timestep, window_size):
+        '''
+        Generate state from data 
+
+        Notes
+        -----
+        Apply Sigmoid Function to States. #TODO: Why not directly use the states values?
+
+        Parameters
+        ----------
+        data : 
+
+        windowed_money: 
+            Money on wallet for each timestep in time-window
+        timestep: int
+            Intial Timestep for window.
+        window_size: int
+           Time window length for states and actions.
+        
+        Returns
+        -------
+        Computed States within time window
+        #TODO: Define Shape
+        '''
   
         starting_id = timestep - window_size
         
@@ -139,6 +237,17 @@ class AI_Trader():
         return data.iloc[start:start+period,:] 
 
     def get_reward_money(self,start_money, actual_price,money,past_profit,fee_p=0,action=None):
+        '''
+        Reward Function
+        Returns
+        -------
+        reward
+            Reward Value
+        act_val
+            Cash outstanding after executing action
+        fee
+            Fees paid by agent
+        '''
         act_val= 0
         for invest,buy_in in self.inventory:
             pos_yield=(actual_price-buy_in)/buy_in
@@ -153,7 +262,18 @@ class AI_Trader():
         return reward,act_val,fee
 
     def dataset_loader(self,symbol):
+        '''
+        Load dataset using pandas data reader.
 
+        Parameters
+        ----------
+        symbol:
+            #TODO: What is that exactly?
+
+        Returns
+        -------
+        Dataset Columns named Closed 
+        '''
         dataset = data_reader.DataReader(symbol, data_source="binance")
         
         start_date = str(dataset.index[0]).split()[0]
@@ -164,12 +284,38 @@ class AI_Trader():
         return close
 
     def stock_price_format(self,n):
+        '''
+        Reformat Stock Price Value to fit string standard format
+
+        Returns
+        -------
+        string : str
+            Formated price stock
+        '''
         if n < 0:
             return "- # {0:2f}".format(abs(n))
         else:
             return "$ {0:2f}".format(abs(n))
     
     def save_data(self,action_data,epi_data,episode,train_data,epi_dataFrame,overwrite=False,save_model=True):
+        '''
+        Save Episode Data to csv
+
+        Parameters:
+        action_data
+
+        epi_data
+
+        episode
+
+        train_data
+
+        epi_dataFrame
+
+        overwrite=False
+
+        save_model=True
+        '''
         save_str=datetime.now().strftime('%Y%m%d')
         save_path=self.data_path+'/Bot/RL_Bot/'+save_str
         index=0
@@ -190,52 +336,77 @@ class AI_Trader():
         print('Data saved')
 
     def train(self,episodes,window_size,data_in,batch_size):
+        '''
+        Main Train function.
+
+        Notes
+        -----
+        More specific documentation with in-line comments on code
+
+        Parameters
+        ----------
+        episodes:
+            Number of episodes to be played.
+        window_size: int
+           Time window length for states and actions.
+        data_in
+
+        batch_size: int
+         Size of Batch for fitting model
+        '''
+        # Init Parameters for Train Algorithm
         data_samples_in = len(data_in) - 1
         #data_samples =int(data_samples // 1000)
         self.epi_cols=['episode','#buy_actions','#sell_actions','money','fee','profit','epsilon']
         #action_data=pd.DataFrame(columns=['episode','run','date','action','state','money_free','money_fiktiv','invest','fee','reward','profit'])
         epi_dataFrame=pd.DataFrame(columns=self.epi_cols)
-        runs = 10
-        period=2*24*14 # 1h-> 1Tag -> 2 wochen
-        invest=0
-        start_money=200
-        windowed_money=[start_money]*(window_size+1)
-        fee_p=0.001
-        train_cnt=0
+        runs = 10 # Max number of runs on each episode
+        period=2*24*14 # [hours?] 1h-> 1Tag -> 2 wochen TODO: Why the 2 in front? 
+        invest=0 # Invested Value
+        start_money=200 # Initial Money available on wallet
+        windowed_money=[start_money]*(window_size+1) # money on wallet for each timestep in time-window
+        fee_p=0.001 # Fee paid for trade, as percentage of trade value
+        train_cnt=0 # Counter for train iterations
         epi_data=[]
+        # Loop over every episode
         for episode in range(1, episodes + 1):
             print("Episode: {}/{}".format(episode, episodes))
-            if episode % 10 == 0:
+            if episode % 10 == 0: # Increase Epsilon every 10 episodes
                 self.epsilon+=0.5
                 print(f'on Episode {episode} set Eplison to {self.epsilon} to find global minimum')
-            run_profit=0.0
+            run_profit=0.0 # Init Profit on episode
+            # Init dataframe for runs
             action_data=pd.DataFrame(columns=['episode','run','timestep','date','action','state','money_free','money_fiktiv','invest','fee','reward','profit'])
+            # Loop inside one episode over number runs 
             for run in range(1,runs+1):
                 print("Episode: {}/{} || Run {}/{}".format(episode, episodes,run,runs))
-                if run % 5 == 0:
+                if run % 5 == 0: # Increase epsilon every 5 runs
                     self.epsilon+=(0.5 -(run/runs)*0)
                     print(f'on Run {run} set Eplison to {self.epsilon} to find global minimum')
                 data=self.getrandomSample(data_in,period)
                 #action_data=pd.DataFrame(columns=['episode','run','timestep','date','action','state','money_free','money_fiktiv','invest','fee','reward','profit'])
+                # Init params to be used on run
                 data_samples=len(data)-1
-                total_profit = 0.0
-                self.inventory = []
+                total_profit = 0.0 # Profit on run
+                self.inventory = [] # Wallet inventory
                 train_data={}
-                buy_cnt=0
-                fees=0
-                sell_cnt=0
-                money_free=start_money
+                buy_cnt=0 # Counter for buys
+                fees=0 # Fees expenses on this run
+                sell_cnt=0  # Counter for buys
+                money_free=start_money # Init money available
                 money_fiktiv=money_free
                 windowed_money=[money_fiktiv]*(window_size+1)
                 invest=0
-                state = self.state_creator(data,windowed_money, 0, window_size)
+                state = self.state_creator(data,windowed_money, 0, window_size) # Gatter state from data
                 for t in tqdm(range(data_samples)):
-                    action = self.trade(state)
-                    next_state = self.state_creator(data,windowed_money, t+1, window_size)
-                    reward = 0
+                    action = self.trade(state) # Compute Action given state
+                    next_state = self.state_creator(data,windowed_money, t+1, window_size) # Gatter State after action
+                    reward = 0 # Init Reward
+                    # Evaluate if money is over and inventory is empty, thus has lost all money.
                     if money_free <=1 and len(self.inventory)<=0:
                         epi_data.append([episode,buy_cnt,sell_cnt,round(money_fiktiv,2),round(fees,2),round(total_profit,2),self.epsilon])
                         break
+                    # Conduct evaluations and compute reward depending on which action was taken.
                     if action == 1 and money_free>20: #Buying 50%
                         buy_cnt+=1 
                         tmp_invest=money_free*0.5
@@ -277,6 +448,7 @@ class AI_Trader():
                         action_data=pd.concat([action_data,pd.DataFrame([[episode,run,t,data['date'].values[t],'hold',list(state[0]),round(money_free,2),round(money_fiktiv,2),round(invest,2),0.0,round(reward,2),round(total_profit,4)]],columns=action_data.columns)])
                         #reward = max(data['close'].values[t] - buy_price.0)
                         #print("AI Trader sold: ", self.stock_price_format(data['close'].values[t]), " Profit: " + self.stock_price_format(data['close'].values[t] - buy_price) )
+                    # Identify if all samples were used. 
                     if t == data_samples - 1:
                         done = True
                     else:
@@ -285,6 +457,7 @@ class AI_Trader():
                         windowed_money.pop(0)
                         windowed_money.append(money_fiktiv)
                         state = next_state
+                    # Finish episode if all data sample has been used
                     if done:
                         epi_data.append([episode,buy_cnt,sell_cnt,round(money_fiktiv,2),round(fees,2),round(total_profit,2),self.epsilon])
                         print("/n ########################")
@@ -292,6 +465,7 @@ class AI_Trader():
                         print(f'#buys {buy_cnt}, #sells {sell_cnt}')
                         print("########################")
                         break
+                    # Conduct Training in batch
                     if len(self.memory) > batch_size:
                         res=self.batch_train(batch_size)
                         epi_string='Epi_'+str(episode)
@@ -302,6 +476,7 @@ class AI_Trader():
                             train_data[epi_string]['#trains']=train_cnt
                             train_data[epi_string]['epsilon'].append(self.epsilon)  
                         train_cnt+=1
+                    # Checkpoint data
                     if t >=100 and t % 100 == 0:
                         self.save_data(action_data,epi_data,episode,train_data,epi_dataFrame,save_model=False)
                         #print(f'episode {episode}, sample ({t}/{len(data)-1}).Profit {total_profit:.2f} || money: {money:.2f} || invest: {invest:.2f} || #buys {buy_cnt}, #sells {sell_cnt}')
@@ -313,6 +488,7 @@ class AI_Trader():
     
 
 if __name__ == "__main__":
+    # TODO: where the package utils come from?
     data=utils.loadData(onefile=False,asset='BTC')[0] # hier csv daten laden
     window_size = 20
     state_size = 100 # 4 stes ( close, hist,rsi,ema) und money
