@@ -144,7 +144,7 @@ class AI_Trader():
 
         Notes
         -----
-        Following DQN Algorithm the reward decay  (gamma) is used in this function to define future rewards.
+        Following DQN Algorithm the reward decay (gamma) is used in this function to define future rewards.
 
         Parameters
         ----------
@@ -163,7 +163,7 @@ class AI_Trader():
         for state, action, reward, next_state, done in batch:
             reward = reward
             if not done:
-                reward = reward + self.gamma * np.amax(self.model.predict(next_state,verbose = 0)[0])
+                reward = reward + self.gamma * np.amax(self.model.predict(next_state,verbose = 0)[0]) 
 
             target = self.model.predict(state,verbose = 0)
             target[0][action] = reward
@@ -181,7 +181,7 @@ class AI_Trader():
 
         Notes
         -----
-        Apply Sigmoid Function to States. #TODO: Why not directly use the states values?
+        Apply Sigmoid Function to States. #TODO: Why not directly use the states values? --> normalize data, model shouldnt be affected by the scales of the measures.
 
         Parameters
         ----------
@@ -197,7 +197,7 @@ class AI_Trader():
         Returns
         -------
         Computed States within time window
-        #TODO: Define Shape
+        #TODO: Define Shape --> NumPy Array with shape: window_size * 5
         '''
   
         starting_id = timestep - window_size
@@ -268,7 +268,8 @@ class AI_Trader():
         Parameters
         ----------
         symbol:
-            #TODO: What is that exactly?
+            #TODO: What is that exactly? --> name of asset (in this case)
+            DataReader creates df objects by using data sources from the internet. Popular for realtime stock price datasets.
 
         Returns
         -------
@@ -361,7 +362,7 @@ class AI_Trader():
         #action_data=pd.DataFrame(columns=['episode','run','date','action','state','money_free','money_fiktiv','invest','fee','reward','profit'])
         epi_dataFrame=pd.DataFrame(columns=self.epi_cols)
         runs = 10 # Max number of runs on each episode
-        period=2*24*14 # [hours?] 1h-> 1Tag -> 2 wochen TODO: Why the 2 in front? 
+        period=2*24*14 # [hours?] 1h-> 1Tag -> 2 wochen TODO: Why the 2 in front? --> Wir haben halbstündige daten. Dh 2 Wochen.
         invest=0 # Invested Value
         start_money=200 # Initial Money available on wallet
         windowed_money=[start_money]*(window_size+1) # money on wallet for each timestep in time-window
@@ -386,7 +387,7 @@ class AI_Trader():
                 data=self.getrandomSample(data_in,period)
                 #action_data=pd.DataFrame(columns=['episode','run','timestep','date','action','state','money_free','money_fiktiv','invest','fee','reward','profit'])
                 # Init params to be used on run
-                data_samples=len(data)-1
+                data_samples=len(data)-1 
                 total_profit = 0.0 # Profit on run
                 self.inventory = [] # Wallet inventory
                 train_data={}
@@ -457,7 +458,7 @@ class AI_Trader():
                         windowed_money.pop(0)
                         windowed_money.append(money_fiktiv)
                         state = next_state
-                    # Finish episode if all data sample has been used
+                    # Finish run if all data sample has been used
                     if done:
                         epi_data.append([episode,buy_cnt,sell_cnt,round(money_fiktiv,2),round(fees,2),round(total_profit,2),self.epsilon])
                         print("/n ########################")
