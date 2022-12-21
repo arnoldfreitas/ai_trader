@@ -72,7 +72,7 @@ class AI_Trader():
         self.start_money=start_money
 
         self.gamma = 0.95
-        self.epsilon = 1.0 #eploration or not 1 is full random, start with 1 
+        self.epsilon = 1.0 # exploration or not 1 is full random, start with 1 
         self.epsilon_final = 0.01 # final epsilon
         self.epsilon_decay = 0.995
         if load_model:
