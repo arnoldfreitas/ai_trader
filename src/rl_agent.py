@@ -487,10 +487,26 @@ class AI_Trader():
             print(f'episode {episode}/{episodes}. Profit {total_profit:2f} || money fiktiv: {money_fiktiv:.2f} ||  invest: {invest:.2f} || #buys {buy_cnt}, #sells {sell_cnt}')
             self.save_data(action_data,epi_data,episode,train_data,epi_dataFrame)
     
+def loadData(onefile=False,asset=None):
+    out=[]
+    for file in os.listdir('./data'):
+        if asset is not None and asset not in file:
+            continue
+        if 'histData_dt1800.0s' in file:
+            out.append(pd.read_csv('./data/'+file))
+    if onefile:
+        out_df=pd.DataFrame(columns=out[0].columns)
+        for item in out:
+            out_df=pd.concat([out_df,item])
+        return out_df
+    else:
+        return out
+
 
 if __name__ == "__main__":
     # TODO: where the package utils come from?
-    data=utils.loadData(onefile=False,asset='BTC')[0] # hier csv daten laden
+    # data=utils.loadData(onefile=False,asset='BTC')[0] # hier csv daten laden
+    data=loadData(onefile=False,asset='BTC')[0] # hier csv daten laden
     window_size = 20
     state_size = 100 # 4 stes ( close, hist,rsi,ema) und money
     episodes = 1000
