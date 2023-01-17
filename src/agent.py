@@ -1,10 +1,12 @@
-import numpy as np
-import pandas as pd
 import random
 import os
+import traceback
+from typing import Tuple, Union, List
+
+import numpy as np
+import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
-from typing import Tuple
 
 
 
@@ -17,21 +19,53 @@ class Trader_Agent():
     '''
     def __init__(self, 
                 observation_space: tuple, 
-                action_space: tuple) -> None:
+                action_space: tuple,
+                model_name: str ="AITrader",
+                data_path: str ='./../data',
+                load_model: str =None,
+                epsilon: float = 1.0,
+                epsilon_final: float = 0.01,
+                epsilon_decay: float = 0.995,) -> None:
         """
         Receive arguments and initialise the  class params.
         Parameters
         ---------
         observation_space: tuple
-            Shape of observation / state space
+            Shape of observation / state space: (n_inputs, window_size)
         action_space: tuple
-            Shape of action space
+            Shape of action space: 
+            DQN: (,4) (reward, act_buy50, act_buy100, act_sell)
+            DRL: (,2) (reward, act_continuos)
         """
         self.model = None
-        self.epsilon = 0.0
-        pass
-    
-    def build_model(self):
+        self.data_path=data_path
+
+        # States / Observation
+        self.observation_space = observation_space
+        self.state_size = observation_space[0]
+        self.window_size=observation_space[1]
+        
+        # Action
+        self.action_space = action_space
+        
+        # Exploration Params
+        self.epsilon = epsilon # exploration or not 1 is full random, start with 1 
+        self.epsilon_final = epsilon_final # final epsilon
+        self.epsilon_decay = epsilon_decay 
+
+        # Model Params. Build/Load Model
+        self.model_name = model_name
+        if (load_model is not None) and (isinstance(load_model, str)):
+            try:
+                self.model = self.load_model()
+            except:
+                print('Model loading failed:')
+                print(traceback.print_exc())
+                self.model=self.model_builder()
+        else:
+            self.model=self.model_builder()
+
+    def build_model(self, learning_rate=1e-3):
         """
         Build Policy model with predefined architecture.
 
@@ -51,7 +85,8 @@ class Trader_Agent():
             keras.layers.Dense(units=self.action_space, activation='linear')
             ])
         #TODO: Make learning-rate changeable.
-        model.compile(loss='mse', optimizer=tf.keras.optimizers.Adam(learning_rate=0.001))
+        model.compile(loss='mse', 
+                optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
         return model
     
     def load_model(self, model_path: str):
@@ -75,10 +110,11 @@ class Trader_Agent():
                 epi_list.append(int(file.split('.')[0].split('_')[3]))
         load_epi=max(epi_list)
         load_date=date_list[epi_list.index(load_epi)] 
-        # TODO fix load model line
-        model = keras.models.load_model(self.data_path+"/Bot/models/ai_trade_{}_{}.h5".format(load_date,load_epi))
-        self.epsilon=0.5
-        print("model: ai_trade_{}_{} loaded. Eplison set to {}.".format(load_date,load_epi,self.epsilon))
+        model = keras.models.load_model(
+                self.data_path+"/Bot/models/ai_trade_{}_{}.h5".format(load_date,load_epi))
+
+        print("model: ai_trade_{}_{} loaded. Eplison set to {}.".format(
+                load_date,load_epi,self.epsilon))
         return model
 
     def compute_action(self, state: np.ndarray) ->  np.ndarray:
