@@ -10,13 +10,30 @@ import yfinance as yf
 
 
 def to_sequences(data, seq_len, forecast):
+    """
+    Builds all sequences of data with a length of seq_len
+
+    NOTES
+    -----
+    forecast is not used
+
+    """
     d = []
     lst = list(range(len(data) - seq_len))
     for index in lst:
         d.append(data[index: index + seq_len])
     return np.array(d)
 
+
 def preprocess_sequence(data_raw, seq_len, train_sequence, test_sequence, forecast):
+    """
+    preprocesses sequences to train and test LSTM
+
+    NOTES
+    -----
+    X_train:
+    Builds array of (train_sequence) sequences, with a length of (seq_len - forecast)
+    """
     data = to_sequences(data_raw, seq_len, forecast)
     test_end = data.shape[0]
     test_start = test_end - (test_sequence)

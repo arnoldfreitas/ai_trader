@@ -5,8 +5,7 @@ import os
 import tensorflow as tf
 from tensorflow import keras
 from typing import Tuple
-
-
+from env import BTCMarket_Env
 
 class Trader_Agent():
     '''
@@ -15,9 +14,11 @@ class Trader_Agent():
     Build model/load model, calculates action.
 
     '''
+    
     def __init__(self, 
                 observation_space: tuple, 
-                action_space: tuple) -> None:
+                action_space: tuple,
+                learning_rate: float) -> None:
         """
         Receive arguments and initialise the  class params.
         Parameters
@@ -26,9 +27,25 @@ class Trader_Agent():
             Shape of observation / state space
         action_space: tuple
             Shape of action space
+
+            # Because of continuous action space it would make sense like: (dimension, [range]) = (1, [-1, 1])
+            # action_space[0] = 1 = dimension, action_space[1] = [-1, 1] = range of output of policy network and for random exploring
+            See TODO below reguarding the action space
         """
         self.model = None
         self.epsilon = 0.0
+
+        #TODO: action_space as input important? 
+        self.output_dim = action_space[0] ### Überhaupt wichtig hier action_space zu übergeben? Ist eigentlich immer derselbe
+        self.output_range = action_space[1] ### Same here
+        '''
+        Alternativ:
+
+        self.output_dim = 1
+        self.output_range = [-1,1]
+        '''
+        self.learning_rate = learning_rate
+        self.state_size = observation_space
         pass
     
     def build_model(self):
@@ -43,7 +60,9 @@ class Trader_Agent():
         -------
             Tensorflow Model 
         """
-        model = keras.models.Sequential([        
+
+        ### Code from rl_agent
+        '''model = keras.models.Sequential([        
             keras.Input(shape=(self.state_size,)),
             keras.layers.Dense(units=64, activation='relu'),
             keras.layers.Dense(units=128, activation='relu'),
@@ -52,6 +71,26 @@ class Trader_Agent():
             ])
         #TODO: Make learning-rate changeable.
         model.compile(loss='mse', optimizer=tf.keras.optimizers.Adam(learning_rate=0.001))
+        return model'''
+
+
+        ### Continuous action space with MLP (just for starting purposes)
+        model = keras.models.Sequential([        
+            keras.Input(shape=(self.state_size,)),
+            keras.layers.Dense(units=64, activation='relu'),
+            keras.layers.Dense(units=128, activation='relu'),
+            keras.layers.Dense(units=64, activation='relu'),
+            keras.layers.Dense(units=self.output_dim, activation='tanh')
+            ])
+
+        #TODO: Build RNN (LSTM) as policy network
+
+        #TODO: Design Utility Function in BTCMarket_Env
+        # Loss function has to be negative in order to perform gradient ascent
+        custom_loss_func = -BTCMarket_Env.compute_utility 
+
+        model.compile(loss=custom_loss_func, optimizer=tf.keras.optimizers.Adam(learning_rate=self.learing_rate))
+
         return model
     
     def load_model(self, model_path: str):
@@ -81,20 +120,32 @@ class Trader_Agent():
         print("model: ai_trade_{}_{} loaded. Eplison set to {}.".format(load_date,load_epi,self.epsilon))
         return model
 
-    def compute_action(self, state: np.ndarray) ->  np.ndarray:
+    def compute_action(self, state: np.ndarray) ->  float:
         """
-        Performs Trade action from an given state. Uses epsilon greedy method or model.predict to define action.
+        Performs Trade action from a given state. Uses epsilon greedy method or model.predict to define action.
         
         Note
         ----
-        As in rl_agent.AI_Trader.trade
+        Old implementaion of this method: As in rl_agent.AI_Trader.trade
+
+        Idea:
+        [0.2, 1] --> buy(/long) with 0.x % of total money
+        ]-0.2, 0.2[ --> hold/wait
+        [-1, -0.2] --> sell(/short) 0.x % of total money
+
+        #TODO: Probably build an extra function for this in the BTCMarket_Env Class
 
         Returns
         -------
-            Computed actions
+            Computed action
         """
+        #TODO: Is this the way to go? Or everytime compute action and sometimes add noise to the computed action?
         if random.random() <= self.epsilon:
-            return random.randrange(self.action_space)
+            return random.uniform(*self.output_range)
       
-        actions = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0)
-        return np.argmax(actions)
+        # round computed value to one decimal point
+        action_val = round(self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0), 1)
+        # Idea is to make action_space smaller
+        if abs(action_val) < 0.2:
+            return 0
+        return action_val

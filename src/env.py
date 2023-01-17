@@ -24,7 +24,7 @@ class BTCMarket_Env():
         
         Notes
         -----
-        It is embedded inside rl_agent.AI_Trader.train, when a episode is over and another start
+        It is embedded inside rl_agent.AI_Trader.train, when a episode is over and another starts
         """
         pass
     
@@ -38,6 +38,27 @@ class BTCMarket_Env():
         """
         pass
 
+    def compute_valid_action(self, action: float) -> float:
+        """
+        Receives action_value from step() with one decimal point rounded in Agent.comput_action.
+
+        Notes
+        -----
+        Should calculate a rational action.
+        Should take in to account: open_position, free_money etc. from current state.
+
+        Ideas:
+        If action_val > 0: Invest (action_val) % of total money. If already invested with (action_val) % of total money, and at next timestep we get 
+        a different action_val, change the position to new action_val % of total money.
+        If action_val = 0: wait/hold.
+        If action_val < 0: sell open position (if there isi one) and go short with (action_val) % of total money
+
+        Problem: Many Transaction fees, but the Agent would learn to cope with this problem maybe?! 
+        
+        """
+
+        pass
+
     def compute_reward(self, state: np.ndarray, action: np.ndarray) -> float:
         """
         Function to compute reward based on state and action.
@@ -46,6 +67,17 @@ class BTCMarket_Env():
         -----
         build state as in rl_agent.AI_Trader.get_reward_money
         """
+        pass
+
+    def compute_utility(self, daily_profits: pd.DataFrame) -> np.ndarray:
+        """
+        To compute e.g. the sterling ratio, keep track of profit and loss of every trade (or daily prfoit) (preferably DataFrame Object)).
+
+        Notes
+        -----
+        
+        """
+
         pass
 
     def sigmoid(self,x):
