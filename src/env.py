@@ -38,13 +38,10 @@ class BTCMarket_Env():
         self.money_available = None
         self.wallet_value = None # money_available + BTC_price * units_in_inventory
 
-        self.buy_count = 0
-        self.sell_count = 0
-        
         # States / Observation
         self.observation_space = observation_space
         self.state_size = observation_space[0]
-        self.window_size=observation_space[1]
+        self.window_size = observation_space[1]
         
         # Action
         self.action_space = action_space
@@ -53,7 +50,7 @@ class BTCMarket_Env():
         self.ep_period = ep_period
         self.trading_fee = trading_fee
         self.ep_data_cols = ep_data_cols
-        self.episode_length = None
+        self.episode_length = 0
         self.ep_data = None
 
     def reset(self) -> None:
@@ -76,15 +73,18 @@ class BTCMarket_Env():
 
         # Internal Wallet Information Params:
         self.windowed_money = [self.start_money]*(self.window_size+1)
-        self.inventory = [] # postions: List[Tuple[Money_Invested, Unit_Price, Units]]
+        self.inventory = [] # positions: List[Tuple[Money_Invested, Unit_Price, Units]]
         self.money_available = self.start_money
-        self.btc_wallet = 0
+        self.btc_wallet = 0 # Amount of BTCs in wallet
         self.wallet_value = self.start_money # money_available + BTC_price * units_in_inventory
+
+        self.buy_count = 0
+        self.sell_count = 0
 
     def step(self, 
             action: np.ndarray, 
             btc_wallet_variaton: float, # in [-1,1] 
-            windowed_money : List[float]) -> Tuple[np.ndarray, float]:
+            ) -> Tuple[np.ndarray, float, bool]:
         """
         Receives an action (Output from Agent.compute_action) and computes the next observation/state and its reward.
         
@@ -118,10 +118,7 @@ class BTCMarket_Env():
             money_variaton = sum([x[2] for x in self.inventory]) \
                 * abs(btc_wallet_variaton) * actual_pice
             btc_units = - money_variaton / actual_pice
-            # TODO: We need to change inventory to fit selling only part of BTCs in wallet
-            # Should the BTC-Wallet be a FIFO?
             money_variaton *= (1-self.trading_fee)
-            self.inventory = []
          
         # Compute State s(t+1)
         starting_id = self.ep_timestep - self.window_size
@@ -151,22 +148,28 @@ class BTCMarket_Env():
         state = np.array([np.nan_to_num(state)])
         # Compute Reward
         reward = self.compute_reward(state, action, actual_pice)
+        # Change on inventory after reward, in case we sell
+        if btc_wallet_variaton == -1:
+            # TODO: Change to fit continuos Act_space. At the moment: sell all BTC in wallet:
+            # TODO: We need to change inventory to fit selling only part of BTCs in wallet
+            # Should the BTC-Wallet be a FIFO?
+            self.inventory = []
 
+        # At the end of step: necessary updates to internal params
+        self.money_available += money_variaton
+        self.btc_wallet += btc_units
+        self.wallet_value = self.money_available + btc_invest
         # Check if Episode is Done
         if self.ep_timestep == self.episode_length - 1:
             done = True
         else:
             done = False
             # self.memory.append((state, action, reward, next_state, done))
-            windowed_money.pop(0)
+            self.windowed_money.pop(0)
             # windowed_money.append(self.money_available)
-            windowed_money.append(self.wallet_value)
+            self.windowed_money.append(self.wallet_value)
             self.ep_timestep+=1
 
-        # At the end of step: necessary updates to internal params
-        self.money_available += money_variaton
-        self.btc_wallet += btc_units
-        self.wallet_value = self.money_available + btc_invest
         return state, reward, done
 
     def compute_reward(self, state: np.ndarray, action: np.ndarray,

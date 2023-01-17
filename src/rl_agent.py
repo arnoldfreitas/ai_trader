@@ -153,7 +153,7 @@ class AI_Trader():
         
         Returns
         -------
-        reults : 
+        result : 
             Tensorflow Training History
         '''
         batch = []

@@ -34,7 +34,7 @@ class Trader_Agent():
             Shape of observation / state space: (n_inputs, window_size)
         action_space: tuple
             Shape of action space: 
-            DQN: (,4) (reward, act_buy50, act_buy100, act_sell)
+            DQN: (,4) (act_hold, act_buy50, act_buy100, act_sell)
             DRL: (,2) (reward, act_continuos)
         """
         self.model = None
@@ -132,5 +132,13 @@ class Trader_Agent():
         if random.random() <= self.epsilon:
             return random.randrange(self.action_space)
       
-        actions = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0)
-        return np.argmax(actions)
+        actions = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],
+                                                                    dtype=np.float32),
+                                    shape=(1,self.state_size)),verbose = 0)
+        return actions # np.argmax(actions)
+
+    def update_epsilon(self, increase_epsilon: float = 0.0):
+        if increase_epsilon > 0.0:
+            self.epsilon+=increase_epsilon
+        elif self.epsilon > self.epsilon_final:
+            self.epsilon *= self.epsilon_decay
