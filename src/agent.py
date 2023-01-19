@@ -1,7 +1,10 @@
-import numpy as np
-import pandas as pd
 import random
 import os
+import traceback
+from typing import Tuple, Union, List
+
+import numpy as np
+import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
 from typing import Tuple
@@ -18,22 +21,23 @@ class Trader_Agent():
     def __init__(self, 
                 observation_space: tuple, 
                 action_space: tuple,
-                learning_rate: float) -> None:
+                ###learning_rate: float) -> None:
+                model_name: str ="AITrader",
+                data_path: str ='./../data',
+                load_model: str =None,
+                epsilon: float = 1.0,
+                epsilon_final: float = 0.01,
+                epsilon_decay: float = 0.995,) -> None:
         """
         Receive arguments and initialise the  class params.
         Parameters
         ---------
-        observation_space: tuple
-            Shape of observation / state space
-        action_space: tuple
-            Shape of action space
+        Shape of action space: 
+        DQN: (,4) (act_hold, act_buy50, act_buy100, act_sell)
+        DRL: (,2) (reward, act_continuos)
 
-            # Because of continuous action space it would make sense like: (dimension, [range]) = (1, [-1, 1])
-            # action_space[0] = 1 = dimension, action_space[1] = [-1, 1] = range of output of policy network and for random exploring
-            See TODO below reguarding the action space
-        """
-        self.model = None
-        self.epsilon = 0.0
+        # Because of continuous action space it would make sense like: (dimension, [range]) = (1, [-1, 1])
+        # action_space[0] = 1 = dimension, action_space[1] = [-1, 1] = range of output of policy network and for random exploringe
 
         #TODO: action_space as input important? 
         self.output_dim = action_space[0] ### Überhaupt wichtig hier action_space zu übergeben? Ist eigentlich immer derselbe
@@ -45,10 +49,37 @@ class Trader_Agent():
         self.output_range = [-1,1]
         '''
         self.learning_rate = learning_rate
-        self.state_size = observation_space
-        pass
-    
-    def build_model(self):
+        """
+        
+        self.model = None
+        self.data_path=data_path
+
+        # States / Observation
+        self.observation_space = observation_space
+        self.state_size = observation_space[0]
+        self.window_size=observation_space[1]
+        
+        # Action
+        self.action_space = action_space
+        
+        # Exploration Params
+        self.epsilon = epsilon # exploration or not 1 is full random, start with 1 
+        self.epsilon_final = epsilon_final # final epsilon
+        self.epsilon_decay = epsilon_decay 
+
+        # Model Params. Build/Load Model
+        self.model_name = model_name
+        if (load_model is not None) and (isinstance(load_model, str)):
+            try:
+                self.model = self.load_model()
+            except:
+                print('Model loading failed:')
+                print(traceback.print_exc())
+                self.model=self.model_builder()
+        else:
+            self.model=self.model_builder()
+
+    def build_model(self, learning_rate=1e-3):
         """
         Build Policy model with predefined architecture.
 
@@ -61,26 +92,15 @@ class Trader_Agent():
             Tensorflow Model 
         """
 
-        ### Code from rl_agent
-        '''model = keras.models.Sequential([        
-            keras.Input(shape=(self.state_size,)),
-            keras.layers.Dense(units=64, activation='relu'),
-            keras.layers.Dense(units=128, activation='relu'),
-            keras.layers.Dense(units=64, activation='relu'),
-            keras.layers.Dense(units=self.action_space, activation='linear')
-            ])
-        #TODO: Make learning-rate changeable.
-        model.compile(loss='mse', optimizer=tf.keras.optimizers.Adam(learning_rate=0.001))
-        return model'''
-
-
-        ### Continuous action space with MLP (just for starting purposes)
+        ### Continuous action space with MLP for BTC 0-1 (just for starting purposes)
+        # 1: buy all, 0: sell all
+        # for trading perpetual swap change activation function of outputlyer to "tanh"
         model = keras.models.Sequential([        
             keras.Input(shape=(self.state_size,)),
             keras.layers.Dense(units=64, activation='relu'),
             keras.layers.Dense(units=128, activation='relu'),
             keras.layers.Dense(units=64, activation='relu'),
-            keras.layers.Dense(units=self.output_dim, activation='tanh')
+            keras.layers.Dense(units=self.output_dim, activation='sigmoid')
             ])
 
         #TODO: Build RNN (LSTM) as policy network
@@ -90,7 +110,7 @@ class Trader_Agent():
         custom_loss_func = -BTCMarket_Env.compute_utility 
 
         model.compile(loss=custom_loss_func, optimizer=tf.keras.optimizers.Adam(learning_rate=self.learing_rate))
-
+        
         return model
     
     def load_model(self, model_path: str):
@@ -114,10 +134,11 @@ class Trader_Agent():
                 epi_list.append(int(file.split('.')[0].split('_')[3]))
         load_epi=max(epi_list)
         load_date=date_list[epi_list.index(load_epi)] 
-        # TODO fix load model line
-        model = keras.models.load_model(self.data_path+"/Bot/models/ai_trade_{}_{}.h5".format(load_date,load_epi))
-        self.epsilon=0.5
-        print("model: ai_trade_{}_{} loaded. Eplison set to {}.".format(load_date,load_epi,self.epsilon))
+        model = keras.models.load_model(
+                self.data_path+"/Bot/models/ai_trade_{}_{}.h5".format(load_date,load_epi))
+
+        print("model: ai_trade_{}_{} loaded. Eplison set to {}.".format(
+                load_date,load_epi,self.epsilon))
         return model
 
     def compute_action(self, state: np.ndarray) ->  float:
@@ -127,11 +148,6 @@ class Trader_Agent():
         Note
         ----
         Old implementaion of this method: As in rl_agent.AI_Trader.trade
-
-        Idea:
-        [0.2, 1] --> buy(/long) with 0.x % of total money
-        ]-0.2, 0.2[ --> hold/wait
-        [-1, -0.2] --> sell(/short) 0.x % of total money
 
         #TODO: Probably build an extra function for this in the BTCMarket_Env Class
 
@@ -145,7 +161,11 @@ class Trader_Agent():
       
         # round computed value to one decimal point
         action_val = round(self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0), 1)
-        # Idea is to make action_space smaller
-        if abs(action_val) < 0.2:
-            return 0
+
         return action_val
+
+    def update_epsilon(self, increase_epsilon: float = 0.0):
+        if increase_epsilon > 0.0:
+            self.epsilon+=increase_epsilon
+        elif self.epsilon > self.epsilon_final:
+            self.epsilon *= self.epsilon_decay

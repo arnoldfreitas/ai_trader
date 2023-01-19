@@ -58,7 +58,7 @@ class AI_Trader():
         TensorFlow Model for RL-Agent
     '''
   
-    def __init__(self, state_size,window_size,start_money=30, action_space=4, model_name="AITrader",data_path='./data',load_model=True):
+    def __init__(self, state_size,window_size,start_money=30, action_space=4, model_name="AITrader",data_path='./../data',load_model=False):
 
         self.state_size=state_size
         self.window_size=window_size
@@ -153,10 +153,11 @@ class AI_Trader():
         
         Returns
         -------
-        reults : 
+        result : 
             Tensorflow Training History
         '''
         batch = []
+        # for i in range(1):
         for i in range(len(self.memory) - batch_size + 1, len(self.memory)):
             batch.append(self.memory[i])
 
@@ -370,6 +371,7 @@ class AI_Trader():
         train_cnt=0 # Counter for train iterations
         epi_data=[]
         # Loop over every episode
+        # for episode in range(1):
         for episode in range(1, episodes + 1):
             print("Episode: {}/{}".format(episode, episodes))
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
@@ -379,6 +381,7 @@ class AI_Trader():
             # Init dataframe for runs
             action_data=pd.DataFrame(columns=['episode','run','timestep','date','action','state','money_free','money_fiktiv','invest','fee','reward','profit'])
             # Loop inside one episode over number runs 
+            # for run in range(1):
             for run in range(1,runs+1):
                 print("Episode: {}/{} || Run {}/{}".format(episode, episodes,run,runs))
                 if run % 5 == 0: # Increase epsilon every 5 runs
@@ -489,11 +492,11 @@ class AI_Trader():
     
 def loadData(onefile=False,asset=None):
     out=[]
-    for file in os.listdir('./data'):
+    for file in os.listdir('./../data'):
         if asset is not None and asset not in file:
             continue
         if 'histData_dt1800.0s' in file:
-            out.append(pd.read_csv('./data/'+file))
+            out.append(pd.read_csv('./../data/'+file))
     if onefile:
         out_df=pd.DataFrame(columns=out[0].columns)
         for item in out:
