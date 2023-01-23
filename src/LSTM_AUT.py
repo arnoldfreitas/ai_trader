@@ -1,11 +1,12 @@
 import os
 import numpy as np
+import pandas as pd
 from tensorflow import keras
 import seaborn as sns
 from pylab import rcParams
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.layers import Bidirectional, Dropout, Activation, Dense, LSTM
+from keras.layers import Bidirectional, Dropout, Activation, Dense, LSTM
 import yfinance as yf
 
 
@@ -34,11 +35,11 @@ def preprocess_sequence(data_raw, seq_len, train_sequence, test_sequence, foreca
     X_train:
     Builds array of (train_sequence) sequences, with a length of (seq_len - forecast)
     """
-    data = to_sequences(data_raw, seq_len, forecast)
-    test_end = data.shape[0]
-    test_start = test_end - (test_sequence)
-    train_end = test_start - 1
-    train_start = train_end - (train_sequence)
+    data = to_sequences(data_raw, seq_len, forecast) # 700x300
+    test_end = data.shape[0] # 700
+    test_start = test_end - (test_sequence) # 600
+    train_end = test_start - 1 # 599
+    train_start = train_end - (train_sequence) # 549
 
     X_train = data[train_start:train_end, :SEQ_LEN-forecast, :]
     y_train = data[train_start:train_end, SEQ_LEN-forecast:, :]
@@ -49,26 +50,30 @@ def preprocess_sequence(data_raw, seq_len, train_sequence, test_sequence, foreca
     return X_train, y_train, X_test, y_test
 
 # Choose stock with ticker symbol
-shortcut = 'AAPL'
-dir_path = shortcut
-df = yf.download(shortcut)
-df = df.sort_values('Date')
+#shortcut = 'AAPL'
+#dir_path = shortcut
+#df = yf.download(shortcut)
+btc_data_path = '/Users/samuelharck/Desktop/Projekt/ai_trader/data/BTC_histData_dt1800.0s_20220825_0629.csv'
+data = pd.read_csv(btc_data_path)
+df = pd.DataFrame(data)
+df = df.sort_values('date')
+#print(df.head())
 
 # Normalization
 scaler = MinMaxScaler()
-close_price = df.Close.values.reshape(-1, 1)
+close_price = df.close.values.reshape(-1, 1)
 scaled_close = scaler.fit_transform(close_price)
 
-#Handle NaNs
+# Handle NaNs
 scaled_close = scaled_close[~np.isnan(scaled_close)]
 scaled_close = scaled_close.reshape(-1, 1)
 
-#Build sequences
+# Build sequences
 SEQ_LEN = 300
 forecast = int(0.33*SEQ_LEN)
 
 test_sequence = forecast
-train_sequence_list = [50,100,200,400]#,1080]
+train_sequence_list = [50,100,200,400] #,1080]
 
 for train_sequence in train_sequence_list:
     print('[INFO]: Train sequence: ' + str(train_sequence))
@@ -129,7 +134,9 @@ for train_sequence in train_sequence_list:
     plt.plot(y_test_inverse, label="Real", color='green')
     plt.plot(y_hat_inverse, label="Prediction", color='red')
     plt.title('Predicted Price')
-    plt.xlabel('Time [days]')
+    plt.xlabel('Time [30 min]')
+    #plt.xticks(np.arange(forecast)[::2], np.arange(1:(forecast//2 + 1))) # 30 min data 
+    plt.xticks(np.arange(forecast)[::2], list(np.arange(1, 51, 1)))
     plt.ylabel('Price')
     plt.legend(loc='best')
     plt.show();
@@ -141,6 +148,7 @@ for train_sequence in train_sequence_list:
 
     y_hat_dark_inverse_norm = np.append(y_hat_inverse_norm, y_dark_inverse_norm)
 
+    dir_path = 'BTC'
     plt.plot(y_test_inverse_norm, label="Real", color='green')
     plt.plot(y_hat_dark_inverse_norm, label="Prediction", color='red')
     plt.title('Predicted Relative Price')

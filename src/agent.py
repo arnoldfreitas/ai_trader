@@ -107,7 +107,7 @@ class Trader_Agent():
 
         #TODO: Design Utility Function in BTCMarket_Env
         # Loss function has to be negative in order to perform gradient ascent
-        custom_loss_func = -BTCMarket_Env.compute_utility 
+        custom_loss_func = - BTCMarket_Env.compute_utility 
 
         model.compile(loss=custom_loss_func, optimizer=tf.keras.optimizers.Adam(learning_rate=self.learing_rate))
         
