@@ -208,7 +208,7 @@ class BTCMarket_Env():
         if btc_wallet_variaton > last_variation:
             # buy & buy more 
             self.buy_count += 1
-            if self.last_invest_variation == 0:
+            if last_variation == 0:
                 btc_invest = self.money_available * btc_wallet_variaton
                 money_variaton = - btc_invest
                 btc_invest *= (1-self.trading_fee)
@@ -240,7 +240,7 @@ class BTCMarket_Env():
         
         # idee: self.inventory max.length = 2. Timestep t und t+1
         else:
-            #
+            #TODO: hold, what do we do with inventory?
             self.inventory.append((btc_invest, 
                         average_price,
                         btc_units))
@@ -367,7 +367,8 @@ class BTCMarket_Env():
             invest_new = invest * (state[-5] + actual_price) / buy_in # immediate profit form t to t+1.
             wallet_new = invest_new + self.money_available
         else:
-            # case: not invested for t AND t-1
+            # case wait: not invested for t AND t-1
+            # TODO: hold
             wallet_new = self.wallet_value - state[-5] / actual_price * self.money_available # profit der gemacht hätte werden können
             # state[-5] gibt veränderung btc kurs von t zu t+1 an. -> prozentuale veränderung berechnen & mit money_available verrechnen
             # MINUS: weil chance verpasst. Wenn kurs gefallen ist, ist state[-5] negativ -> wallet wird größer -> höherer reward, da wait gute aktion war
