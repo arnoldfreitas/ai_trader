@@ -140,15 +140,15 @@ class BTCMarket_Env():
         # At the end of step: necessary updates to internal params
         self.money_available += money_variaton
         self.long_wallet = new_long_wallet
-        self.wallet_value = self.money_available + btc_eur_invest
+        self.wallet_value = self.money_available + new_long_wallet[0]*new_long_wallet[1]
         test_action = new_long_wallet[0]*new_long_wallet[1]/ self.wallet_value 
         if not( abs(test_action - action[0]) < 1e-2 ):
                 print(f"Value no Expected after action:\n \
         action: {action[0]} ; {test_action}; {self.long_position}")
         self.long_position = test_action
         # Check if Episode is Done
-        # if self.ep_timestep == self.episode_length - 1:
-        if self.ep_timestep > 5:
+        if self.ep_timestep == self.episode_length - 1:
+        # if self.ep_timestep > 5:
             done = True
         else:
             done = False
@@ -240,7 +240,7 @@ class BTCMarket_Env():
         if new_position > 0: # Adopting a LONG Position
             btc_wallet_variaton = new_position - self.long_position
             if abs(btc_wallet_variaton) > 1:
-                print(f"btc_wallet_variaton) > 1: {btc_wallet_variaton}")
+                print(f"btc_wallet_variaton > 1: {btc_wallet_variaton}")
             new_long_wallet , money_variaton, long_variation_eur = self.__handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
                         btc_price=btc_price)
             return new_long_wallet, money_variaton, long_variation_eur

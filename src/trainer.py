@@ -103,7 +103,8 @@ class Trainer():
                     next_state, reward, done = self.env.step(action=dqn_action)
 
                     tmp_log_action.append(dqn_action[-1])
-                    tmp_log_state.append(state[19])
+                    # tmp_log_state.append(state[19])
+                    tmp_log_state.append(self.env.long_position)
                     tmp_log_reward.append(reward)
                     state = next_state
                     if done:    
