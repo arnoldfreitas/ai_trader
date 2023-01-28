@@ -92,9 +92,9 @@ class Trader_Agent():
             except:
                 print('Model loading failed:')
                 print(traceback.print_exc())
-                self.model=self.model_builder()
+                self.model=self.build_model()
         else:
-            self.model=self.model_builder()
+            self.model=self.build_model()
 
     def build_model(self, learning_rate=1e-3):
         """
@@ -142,7 +142,7 @@ class Trader_Agent():
 
         custom_loss_func = loss_function 
 
-        model.compile(loss=custom_loss_func, optimizer=tf.keras.optimizers.Adam(learning_rate=self.learing_rate))
+        model.compile(loss=custom_loss_func, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
         
         return model
     

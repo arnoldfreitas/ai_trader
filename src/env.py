@@ -30,7 +30,10 @@ class BTCMarket_Env():
         # General Information Params
         self.ep_count = 0
         self.data_path = data_path
-        self.data_source = self.load_data(onefile, asset)
+        self.data_source = self.load_data(onefile, asset)[0]
+        self.len_source = len(self.data_source)
+        # print(f"{type(self.data_source), type(self.data_source[0])}")
+        # print(f"self.len_source: {self.len_source}")
 
         # Wallet Information Params:
         self.start_money = start_money
@@ -132,7 +135,7 @@ class BTCMarket_Env():
         state = self.__get_new_state()
         
         # Compute Reward
-        reward = self.compute_reward(state, action, actual_price)
+        reward = self.compute_reward_from_tutor(state, action, actual_price)
 
         # At the end of step: necessary updates to internal params
         self.money_available += money_variaton
@@ -144,7 +147,8 @@ class BTCMarket_Env():
         action: {action[0]} ; {test_action}; {self.long_position}")
         self.long_position = test_action
         # Check if Episode is Done
-        if self.ep_timestep == self.episode_length - 1:
+        # if self.ep_timestep == self.episode_length - 1:
+        if self.ep_timestep > 5:
             done = True
         else:
             done = False
@@ -163,9 +167,12 @@ class BTCMarket_Env():
         Notes
         -----
         Information about inner params:
-            long_variation_eur & long_variation_units_BTC & money_variation < 0: Buy
-            long_variation_eur & long_variation_units_BTC & money_variation > 0: Sell
-            long_variation_eur & long_variation_units_BTC & money_variation == 0: Hold
+            long_variation_eur & long_variation_units_BTC > 0
+                & money_variation < 0: Buy
+            long_variation_eur & long_variation_units_BTC < 0
+                & money_variation > 0: Sell
+            long_variation_eur & long_variation_units_BTC 
+                & money_variation == 0: Hold
 
         Paramters:
         ----------
@@ -189,9 +196,9 @@ class BTCMarket_Env():
         # self.long_wallet = [new_amount_btc_in_wallet, new_avg_price_btc_in_wallet]
         if (btc_wallet_variaton > 0): # BUY
             self.buy_long_count += 1
-            if not(money_variation >  0 ) or not(long_variation_eur > 0):
+            if not(money_variation <  0 ) or not(long_variation_eur > 0):
                 print(f"Value no Expected for holding position:\n \
-        money_variation: >0 ; {money_variation}\n \
+        money_variation: <0 ; {money_variation}\n \
         long_variation_eur: >0 ; {long_variation_eur}\n \
         new_amount_btc_in_wallet: {self.long_wallet[0]} ; {new_amount_btc_in_wallet}\n \
         new_avg_price_btc_in_wallet: {self.long_wallet[1]} ; {new_avg_price_btc_in_wallet}\n")
@@ -199,9 +206,9 @@ class BTCMarket_Env():
                         money_variation, long_variation_eur
         elif (btc_wallet_variaton < 0): # SELL
             self.sell_long_count += 1
-            if not(money_variation <  0 ) or not(long_variation_eur < 0):
+            if not(money_variation >  0 ) or not(long_variation_eur < 0):
                 print(f"Value no Expected for holding position:\n \
-        money_variation: <0 ; {money_variation}\n \
+        money_variation: >0 ; {money_variation}\n \
         long_variation_eur: <0 ; {long_variation_eur}\n \
         new_amount_btc_in_wallet: {self.long_wallet[0]} ; {new_amount_btc_in_wallet}\n \
         new_avg_price_btc_in_wallet: {self.long_wallet[1]} ; {new_avg_price_btc_in_wallet}\n")
@@ -271,7 +278,7 @@ class BTCMarket_Env():
             state.append(self.sigmoid(self.windowed_money[i+1] - self.windowed_money[i]))
             state.append(windowed_rsi_data[i]/100)
         #state.append(money)
-        return np.array([np.nan_to_num(state)])
+        return np.nan_to_num(state)
 
     def step_continous_btc(self, 
             action: np.ndarray, 
@@ -408,6 +415,38 @@ class BTCMarket_Env():
             reward = - state[-5] / actual_price * self.money_available # profit der gemacht hätte werden können
 
         return reward
+   
+    def compute_reward_from_tutor(self, state: np.ndarray, action: np.ndarray,
+                actual_price: float,) -> float:
+        """
+        Function to compute reward based on state and action.
+
+        Notes
+        -----
+        build state as in rl_agent.AI_Trader.get_reward_money
+
+        Parameters
+        ----------
+        state: np.ndarray, 
+        action: np.ndarray,
+        actual_price: float
+            Acutal BTC Price
+        Returns
+        -------
+        reward
+            Reward Value
+        """
+
+
+        pos_yield = actual_price / self.long_wallet[1]
+        act_val = pos_yield * self.long_position
+        
+        fee=act_val*self.trading_fee
+        act_val-=fee
+        act_val+=self.money_available
+        reward=act_val-self.start_money
+        
+        return reward
 
     def compute_reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float,) -> float:
@@ -460,9 +499,9 @@ class BTCMarket_Env():
             result = math.inf
         return 1 /(1 + result)
  
-    def get_random_sample(self, data, period):
-        start=random.randint(0,len(data)-period)
-        return data.iloc[start:start+period,:] 
+    def get_random_sample(self, data_in, period):
+        start=random.randint(0,len(data_in)-period)
+        return data_in.iloc[start:start+period,:] 
  
     def load_data(self, onefile=False,asset=None):
         out=[]

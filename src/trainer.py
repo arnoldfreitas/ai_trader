@@ -9,6 +9,7 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
 from tqdm import tqdm_notebook, tqdm
+from matplotlib import pyplot as plt
 
 from env import BTCMarket_Env
 from agent import Trader_Agent
@@ -73,6 +74,9 @@ class Trainer():
 
         # Loop over every episode
         # for episode in range(1):
+        tmp_log_state = []
+        tmp_log_action = []
+        tmp_log_reward = []
         for episode in range(1, n_episodes + 1):
             print("Episode: {}/{}".format(episode, n_episodes))
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
@@ -92,29 +96,45 @@ class Trainer():
                 train_data={}
                 self.env.reset()
                 data_samples = self.env.episode_length
-                state = self.env.step(np.zeros(self.action_space),0)
+                state, _, _ = self.env.step(np.array([0]))
                 for t in tqdm(range(data_samples)):
                     action = self.agent.compute_action(state)
-                    dqn_action, btc_wallet_change = self.transforme_to_dqn_action(action)
-                    next_state, reward, done = self.env.step(action=action, 
-                                                btc_wallet_variaton=btc_wallet_change)
+                    dqn_action = self.transforme_to_dqn_action(action)
+                    next_state, reward, done = self.env.step(action=dqn_action)
 
+                    tmp_log_action.append(dqn_action[-1])
+                    tmp_log_state.append(state[19])
+                    tmp_log_reward.append(reward)
                     state = next_state
+                    if done:    
+                        break
+
+        fig,ax = plt.subplots(3,1)
+        # print(f"{type(tmp_log_state)}, {tmp_log_state[0][0]}")
+        # print(f"{tmp_log_state[0]}")
+        # print(f"{tmp_log_state[0][0]}")
+        ax[0].plot(tmp_log_state)
+        ax[1].plot(tmp_log_action)
+        ax[2].plot(tmp_log_reward)
+        plt.title('testing')
+        plt.show()
+        # plt.close()
+
 
     def transforme_to_dqn_action(self, actions):
         """
         """
-        act = np.argmax(actions)
-        if act == 1:
-            btc_change = 0.5
-        elif act == 2:
-            btc_change = 1
-        elif act == 3:
-            btc_change = 0
+        act_eval = np.argmax(actions)
+        if act_eval == 1:
+            action = 0.5
+        elif act_eval == 2:
+            action = 1.0
+        elif act_eval == 3:
+            action = 0.0
         else:
-            btc_change = self.env.long_position
+            action = self.env.long_position
 
-        return act, btc_change
+        return np.array([action])
 
     def batch_train(self):
         """
@@ -188,5 +208,25 @@ class Trainer():
         epi_dataFrame.to_csv(save_path+"/Epi_data.csv")
         print('Data saved')
 
+if __name__ == "__main__":
+    obs_space = (5,20)
+    act_space = 4
 
+    money = 200
+    fee = 0.001
+    episodes = 1
+    runs_p_eps = 1
+
+    env = BTCMarket_Env(observation_space = obs_space,
+                action_space = act_space,
+                start_money = money,
+                trading_fee= fee)
+    agent = Trader_Agent(observation_space = obs_space,
+                action_space = act_space,)
+    dqntrainer = Trainer(env, agent,
+                observation_space = obs_space,
+                action_space = act_space,
+                batch_size=32)
+
+    dqntrainer.rollout(n_episodes=episodes, run_per_episode=runs_p_eps)
 
