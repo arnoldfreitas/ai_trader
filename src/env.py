@@ -241,7 +241,7 @@ class BTCMarket_Env():
         
         # idee: self.inventory max.length = 2. Timestep t und t+1
         else:
-            #TODO: hold, what do we do with inventory?
+            #TODO: hold, what do we do with inventory?: No change, leave as it as
             self.inventory.append((btc_invest, 
                         average_price,
                         btc_units))
