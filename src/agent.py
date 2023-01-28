@@ -20,6 +20,7 @@ def loss_function(y_true, y_pred):
     y_true: we can compute, therefore we set as reward. Shape must be equal action shape.
     y_pred: actions from policy NN given through fit.
     '''
+    # Loss function has to be negative in order to perform gradient ascent
     loss = - y_true[0]
 
     return loss
@@ -33,9 +34,9 @@ class Trader_Agent():
     '''
     
     def __init__(self, 
-                observation_space: tuple, 
-                action_space: tuple,
-                action_range: list, # min min
+                observation_space: Tuple[int, int], 
+                action_space: float ,
+                action_domain: Tuple[float, float] = (0.0, 1.0), # min max
                 ###learning_rate: float) -> None:
                 model_name: str ="AITrader",
                 data_path: str ='./../data',
@@ -52,16 +53,16 @@ class Trader_Agent():
         DRL: (,2) (act_continuos)
 
         # Because of continuous action space it would make sense like: (dimension, [range]) = (1, [-1, 1])
-        # action_space[0] = 1 = dimension, action_space[1] = [-1, 1] = range of output of policy network and for random exploringe
+        # action_space[0] = 1 = dimension, action_space[1] = [-1, 1] = range of output of policy network and for random exploring
 
         #TODO: action_space as input important? 
         self.output_dim = action_space[0] ### Überhaupt wichtig hier action_space zu übergeben? Ist eigentlich immer derselbe
-        self.output_range = action_space[1] ### Same here
+        self.action_domain = action_space[1] ### Same here
         '''
         Alternativ:
 
         self.output_dim = 1
-        self.output_range = [-1,1]
+        self.action_domain = [-1,1]
         '''
         self.learning_rate = learning_rate
         """
@@ -76,6 +77,7 @@ class Trader_Agent():
         
         # Action
         self.action_space = action_space
+        self.action_domain = action_domain
         
         # Exploration Params
         self.epsilon = epsilon # exploration or not 1 is full random, start with 1 
@@ -120,21 +122,24 @@ class Trader_Agent():
         )
         """
         
-        ### Continuous action space with MLP for BTC 0-1 (just for starting purposes)
-        # 1: buy all, 0: sell all
-        # for trading perpetual swap change activation function of outputlyer to "tanh"
+        ### Continuous action space with MLP: Define the Percentage of wallet on Bitcoins 
+        if min(self.action_domain) < 0.0:
+            # for trading perpetual swap: "tanh"; action_domain in (-1, 1)
+            layer_output = 'tanh'
+        else :
+            # for BTC: "sigmoid"; action_domain in (0, 1)
+            layer_output = 'sigmoid'
+
         model = keras.models.Sequential([        
             keras.Input(shape=(self.state_size,)),
             keras.layers.Dense(units=256, activation='relu'), ## üerprüfen
             keras.layers.Dense(units=128, activation='relu'),
             keras.layers.Dense(units=64, activation='relu'),
-            keras.layers.Dense(units=self.action_space, activation='sigmoid')
+            keras.layers.Dense(units=self.action_space, activation=layer_output)
             ])
 
         #TODO: Build RNN (LSTM) as policy network
 
-        #TODO: Design Utility Function in BTCMarket_Env
-        # Loss function has to be negative in order to perform gradient ascent
         custom_loss_func = loss_function 
 
         model.compile(loss=custom_loss_func, optimizer=tf.keras.optimizers.Adam(learning_rate=self.learing_rate))
@@ -177,21 +182,21 @@ class Trader_Agent():
         ----
         Old implementaion of this method: As in rl_agent.AI_Trader.trade
 
-        #TODO: Probably build an extra function for this in the BTCMarket_Env Class
-
         Returns
         -------
             Computed action
         """
-        #TODO: Is this the way to go? Or everytime compute action and sometimes add noise to the computed action?
         if random.random() <= self.epsilon:
-            return random.uniform(*self.output_range)
+            action = []
+            for id in range(self.action_space):
+                action.append(random.uniform(*self.action_domain))
+            return np.array(action)
       
-        # round computed value to one decimal point
-        # action_val = round(self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0), 1)
         action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0)
 
-        return action_val
+        # round computed value to one decimal point
+        # leaving decision about rounding for trainer
+        return action_val.numpy()
 
     def update_epsilon(self, increase_epsilon: float = 0.0):
         if increase_epsilon > 0.0:
