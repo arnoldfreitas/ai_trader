@@ -14,7 +14,7 @@ class BTCMarket_Env():
     Interaction of the agent with the environment. Calculates utility/reward. Observes states and executes actions (env.step()).
     '''
     def __init__(self,
-                observation_space: tuple, 
+                observation_space: tuple, # (5, 15)
                 action_space: tuple,
                 start_money: float,
                 trading_fee: float = 0,
@@ -39,9 +39,9 @@ class BTCMarket_Env():
         self.wallet_value = None # money_available + BTC_price * units_in_inventory
 
         # States / Observation
-        self.observation_space = observation_space # ??? kann man widow size nicht von state size ableiten?
-        self.state_size = observation_space[0]
-        self.window_size = observation_space[1]
+        self.observation_space = observation_space 
+        self.state_size = observation_space[0] # amount of parameters
+        self.window_size = observation_space[1] # amount of tome-steps from states
         
         # Action
         self.action_space = action_space
@@ -129,7 +129,7 @@ class BTCMarket_Env():
         # Compute State s(t+1)
         starting_id = self.ep_timestep - self.window_size
         if starting_id >= 0:
-            windowed_close_data = self.ep_data['close'].values[starting_id:self.ep_timestep+1]
+            windowed_close_data = self.ep_data['close'].values[starting_id:self.ep_timestep+1] 
             windowed_hist_data = self.ep_data['histogram'].values[starting_id:self.ep_timestep+1]
             windowed_ema_data = self.ep_data['50ema'].values[starting_id:self.ep_timestep+1]
             windowed_rsi_data = self.ep_data['rsi14'].values[starting_id:self.ep_timestep+1]
@@ -153,7 +153,8 @@ class BTCMarket_Env():
         #state.append(money)
         state = np.array([np.nan_to_num(state)])
         # Compute Reward
-        reward = self.compute_reward(state, action, actual_price)
+        # reward = self.compute_reward(state, action, actual_price)
+        reward = self.compute_utility(state, action, actual_price)
         # Change on inventory after reward, in case we sell
         if btc_wallet_variaton == -1:
             # TODO: Change to fit continuos Act_space. At the moment: sell all BTC in wallet:

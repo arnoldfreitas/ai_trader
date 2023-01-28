@@ -115,6 +115,7 @@ class Trainer():
             btc_change = 0
 
         return act, btc_change
+
     def batch_train(self):
         """
         Conduct batch train.
@@ -186,3 +187,6 @@ class Trainer():
         epi_dataFrame=pd.concat([epi_dataFrame,tmp])
         epi_dataFrame.to_csv(save_path+"/Epi_data.csv")
         print('Data saved')
+
+
+

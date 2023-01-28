@@ -10,6 +10,20 @@ from tensorflow import keras
 from typing import Tuple
 from env import BTCMarket_Env
 
+def loss_function(y_true, y_pred):
+    '''
+    Function to compute loss for gradient ascent.
+
+    action is of shape (4)
+    y_true = np.array([reward] * 4)
+
+    y_true: we can compute, therefore we set as reward. Shape must be equal action shape.
+    y_pred: actions from policy NN given through fit.
+    '''
+    loss = - y_true[0]
+
+    return loss
+
 class Trader_Agent():
     '''
     Trader class.
@@ -21,6 +35,7 @@ class Trader_Agent():
     def __init__(self, 
                 observation_space: tuple, 
                 action_space: tuple,
+                action_range: list, # min min
                 ###learning_rate: float) -> None:
                 model_name: str ="AITrader",
                 data_path: str ='./../data',
@@ -34,7 +49,7 @@ class Trader_Agent():
         ---------
         Shape of action space: 
         DQN: (,4) (act_hold, act_buy50, act_buy100, act_sell)
-        DRL: (,2) (reward, act_continuos)
+        DRL: (,2) (act_continuos)
 
         # Because of continuous action space it would make sense like: (dimension, [range]) = (1, [-1, 1])
         # action_space[0] = 1 = dimension, action_space[1] = [-1, 1] = range of output of policy network and for random exploringe
@@ -92,6 +107,19 @@ class Trader_Agent():
             Tensorflow Model 
         """
 
+        """
+        We have an LSTM, which predict the next n time steps for BTC close value.
+
+        model_nur_lestm  =self.load_LSTM(inputs, trainable=False)
+        model_nur_lestm.add_leayer(
+            inputs.append(model_nur_lest.outputs),
+            layer1
+            layer2
+            layer3
+            output_layer
+        )
+        """
+        
         ### Continuous action space with MLP for BTC 0-1 (just for starting purposes)
         # 1: buy all, 0: sell all
         # for trading perpetual swap change activation function of outputlyer to "tanh"
@@ -100,14 +128,14 @@ class Trader_Agent():
             keras.layers.Dense(units=64, activation='relu'),
             keras.layers.Dense(units=128, activation='relu'),
             keras.layers.Dense(units=64, activation='relu'),
-            keras.layers.Dense(units=self.output_dim, activation='sigmoid')
+            keras.layers.Dense(units=self.action_space, activation='sigmoid')
             ])
 
         #TODO: Build RNN (LSTM) as policy network
 
         #TODO: Design Utility Function in BTCMarket_Env
         # Loss function has to be negative in order to perform gradient ascent
-        custom_loss_func = -BTCMarket_Env.compute_utility 
+        custom_loss_func = loss_function 
 
         model.compile(loss=custom_loss_func, optimizer=tf.keras.optimizers.Adam(learning_rate=self.learing_rate))
         
@@ -160,7 +188,8 @@ class Trader_Agent():
             return random.uniform(*self.output_range)
       
         # round computed value to one decimal point
-        action_val = round(self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0), 1)
+        # action_val = round(self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0), 1)
+        action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0)
 
         return action_val
 
