@@ -239,6 +239,8 @@ class BTCMarket_Env():
 
         if new_position > 0: # Adopting a LONG Position
             btc_wallet_variaton = new_position - self.long_position
+            if abs(btc_wallet_variaton) > 1:
+                print(f"btc_wallet_variaton) > 1: {btc_wallet_variaton}")
             new_long_wallet , money_variaton, long_variation_eur = self.__handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
                         btc_price=btc_price)
             return new_long_wallet, money_variaton, long_variation_eur
