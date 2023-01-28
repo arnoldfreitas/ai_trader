@@ -125,7 +125,7 @@ class Trader_Agent():
         # for trading perpetual swap change activation function of outputlyer to "tanh"
         model = keras.models.Sequential([        
             keras.Input(shape=(self.state_size,)),
-            keras.layers.Dense(units=64, activation='relu'),
+            keras.layers.Dense(units=256, activation='relu'), ## üerprüfen
             keras.layers.Dense(units=128, activation='relu'),
             keras.layers.Dense(units=64, activation='relu'),
             keras.layers.Dense(units=self.action_space, activation='sigmoid')
