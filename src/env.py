@@ -66,31 +66,37 @@ class BTCMarket_Env():
         It is embedded inside rl_agent.AI_Trader.train, when a episode is over and another starts
         """
         # Init internal Episode Params
-        self.ep_timestep = 0
+        self.ep_timestep: int = 0
         # Episode Data
         self.ep_data = self.get_random_sample(self.data_source, period=self.ep_period)
-        self.episode_length = len(self.ep_data)-1 
+        self.episode_length: int = len(self.ep_data)-1 
         self.ep_count+=1
 
         # Internal Wallet Information Params:
-        self.windowed_money = [self.start_money]*(self.window_size+1)
-        self.inventory = [] # positions: List[Tuple[Money_Invested, Average_Price, Units_Total]]
-        self.money_available = self.start_money
-        self.btc_wallet = 0 # Amount of BTCs in wallet
-        self.wallet_value = self.start_money # money_available + BTC_price * units_in_inventory
-        self.money_fiktiv = np.array([self.wallet_value])
+        self.windowed_money: list = [self.start_money]*(self.window_size+1)
+        self.inventory: list = [] # positions: List[Tuple[Money_Invested, Average_Price, Units_Total]]
+        # money in wallet for future trade
+        self.money_available: float = self.start_money # [euros]
+        # Absolute amount of BTCs-Long in wallet
+        self.long_wallet: list = [0, 0] # [units of longs, mean_price_bought]
+        # Absolute amount of BTCs-Short in wallet
+        self.short_wallet: list = [0, 0] # [units of shorts, mean_price_sold] 
+        # money_available + BTC_price * self.long_wallet + BTC_Price*self.short_wallet
+        self.wallet_value: float = self.start_money # [euros]:
+        # TODO: why money_fiktiv? 
+        self.money_fiktiv: list = np.array([self.wallet_value]) # [euros]
+        # position on btc in percentage of wallet value
+        self.long_position: float = 0 # [%]: (self.long_wallet*BTC.price) / self.wallet_value[-1]
+        self.short_position: float = 0 # [%]: (self.short_wallet*BTC.price) / self.wallet_value[-1]
 
-        self.buy_count = 0
-        self.sell_count = 0
         # the following are just for now until we decide 
-        self.buy_long_count = 0
-        self.sell_long_count = 0
-        self.buy_short_count = 0
-        self.sell_short_count = 0
+        self.buy_long_count: float = 0
+        self.sell_long_count: float = 0
+        self.buy_short_count: float = 0
+        self.sell_short_count: float = 0
 
     def step(self, 
-            action: np.ndarray, 
-            btc_wallet_variaton: float, # in [-1,1] 
+            action: np.ndarray, # value in [-1,1] representing position of bitcoin to have in wallet on t+1
             ) -> Tuple[np.ndarray, float, bool]:
         """
         Receives an action (Output from Agent.compute_action) and computes the next observation/state and its reward.
@@ -98,36 +104,149 @@ class BTCMarket_Env():
         Notes
         -----
         build state as in rl_agent.AI_Trader.state_creator
+        
+        
+        Parameters
+        ----------
+        action: numpy.ndarray of shape (1)
+            Represent position of short or long to have in wallet on t+1.
+            If the Policy gives a different output, then this must be handled by Trainer before calling env.step.  
+        
+        Returns
+        -------
+        state
+
+        reward
+        
+        done
         """
         assert (self.ep_data is not None)
 
         actual_price = self.ep_data['close'].values[self.ep_timestep]
-
         # Compute Wallet States
-        money_variaton = 0
-        btc_invest = 0
-        btc_units = 0
-        if  btc_wallet_variaton > 0:
-            self.buy_count += 1
-            btc_invest = self.money_available * btc_wallet_variaton
-            money_variaton = - btc_invest
-            # fee = btc_invest * self.trading_fee
-            # btc_invest-=fee
-            btc_invest *= (1-self.trading_fee) 
-            btc_units = btc_invest / actual_price
-            self.inventory.append((btc_invest, 
-                    actual_price,
-                    btc_units))
-        elif  btc_wallet_variaton < 0:
-            self.sell_count += 1
-            # TODO: Change to fit continuos Act_space. At the moment: sell all BTC in wallet:
-            btc_wallet_variaton = -1
-            money_variaton = sum([x[2] for x in self.inventory]) \
-                * abs(btc_wallet_variaton) * actual_price ####### why sum()??
-            btc_units = - money_variaton / actual_price
-            money_variaton *= (1-self.trading_fee)
+        new_long_wallet , money_variaton, btc_eur_invest = self.__handle_position(
+                        new_position=action[0], 
+                        btc_price=actual_price)
          
         # Compute State s(t+1)
+        state = self.__get_new_state()
+        
+        # Compute Reward
+        reward = self.compute_reward(state, action, actual_price)
+
+        # At the end of step: necessary updates to internal params
+        self.money_available += money_variaton
+        self.long_wallet = new_long_wallet
+        self.wallet_value = self.money_available + btc_eur_invest
+        test_action = new_long_wallet[0]*new_long_wallet[1]/ self.wallet_value 
+        if not( abs(test_action - action[0]) < 1e-2 ):
+                print(f"Value no Expected after action:\n \
+        action: {action[0]} ; {test_action}; {self.long_position}")
+        self.long_position = test_action
+        # Check if Episode is Done
+        if self.ep_timestep == self.episode_length - 1:
+            done = True
+        else:
+            done = False
+            # self.memory.append((state, action, reward, next_state, done))
+            self.windowed_money.pop(0)
+            # windowed_money.append(self.money_available)
+            self.windowed_money.append(self.wallet_value)
+            self.ep_timestep+=1
+
+        return state, reward, done
+
+    def __handle_long_position(self,
+            btc_wallet_variaton:float, 
+            btc_price:float):
+        """
+        Notes
+        -----
+        Information about inner params:
+            long_variation_eur & long_variation_units_BTC & money_variation < 0: Buy
+            long_variation_eur & long_variation_units_BTC & money_variation > 0: Sell
+            long_variation_eur & long_variation_units_BTC & money_variation == 0: Hold
+
+        Paramters:
+        ----------
+        btc_wallet_variaton:float 
+            Variation in wallet.
+            btc_wallet_variaton < 0: Buy
+            btc_wallet_variaton > 0: Sell
+            btc_wallet_variaton == 0: Hold
+        btc_price:float
+            Price of bitcoin at t
+        """
+        #TODO: Double check those calculation represent reality
+        # [euros] Amount of euros of BTC to invest in order to have the given final position
+        long_variation_eur = (btc_wallet_variaton * self.wallet_value)*(1-self.trading_fee)
+        # [units of btc] Amount of BTC bought with long_invest_eur
+        long_variation_units_BTC = long_variation_eur / btc_price
+        # [euros] Actual amount of euros that go out of wallet
+        money_variation = -long_variation_eur*(1+self.trading_fee)
+        new_amount_btc_in_wallet = self.long_wallet[0] + long_variation_units_BTC
+        new_avg_price_btc_in_wallet = (self.long_wallet[1]*self.long_wallet[0] + long_variation_eur) / new_amount_btc_in_wallet
+        # self.long_wallet = [new_amount_btc_in_wallet, new_avg_price_btc_in_wallet]
+        if (btc_wallet_variaton > 0): # BUY
+            self.buy_long_count += 1
+            if not(money_variation >  0 ) or not(long_variation_eur > 0):
+                print(f"Value no Expected for holding position:\n \
+        money_variation: >0 ; {money_variation}\n \
+        long_variation_eur: >0 ; {long_variation_eur}\n \
+        new_amount_btc_in_wallet: {self.long_wallet[0]} ; {new_amount_btc_in_wallet}\n \
+        new_avg_price_btc_in_wallet: {self.long_wallet[1]} ; {new_avg_price_btc_in_wallet}\n")
+            return [new_amount_btc_in_wallet, new_avg_price_btc_in_wallet], \
+                        money_variation, long_variation_eur
+        elif (btc_wallet_variaton < 0): # SELL
+            self.sell_long_count += 1
+            if not(money_variation <  0 ) or not(long_variation_eur < 0):
+                print(f"Value no Expected for holding position:\n \
+        money_variation: <0 ; {money_variation}\n \
+        long_variation_eur: <0 ; {long_variation_eur}\n \
+        new_amount_btc_in_wallet: {self.long_wallet[0]} ; {new_amount_btc_in_wallet}\n \
+        new_avg_price_btc_in_wallet: {self.long_wallet[1]} ; {new_avg_price_btc_in_wallet}\n")
+            return [new_amount_btc_in_wallet, new_avg_price_btc_in_wallet], \
+                        money_variation, long_variation_eur
+        else: # HOLD
+            if not(money_variation == 0 )or not(long_variation_eur == 0):
+                print(f"Value no Expected for holding position:\n \
+        money_variation: 0 ; {money_variation}\n \
+        long_variation_eur: 0 ; {long_variation_eur}\n \
+        new_amount_btc_in_wallet: {self.long_wallet[0]} ; {new_amount_btc_in_wallet}\n \
+        new_avg_price_btc_in_wallet: {self.long_wallet[1]} ; {new_avg_price_btc_in_wallet}\n")
+            return self.long_wallet, \
+                        money_variation, long_variation_eur
+    
+    def __handle_position(self, 
+            new_position:float, 
+            btc_price:float)->None:
+        """
+        Paramters:
+        ----------
+        new_position:float 
+            action[0]
+        btc_price:float
+            Price of bitcoin at t
+        """
+        #TODO: Step implemented to only handle longs
+
+        if new_position > 0: # Adopting a LONG Position
+            btc_wallet_variaton = new_position - self.long_position
+            new_long_wallet , money_variaton, long_variation_eur = self.__handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
+                        btc_price=btc_price)
+            return new_long_wallet, money_variaton, long_variation_eur
+
+        elif new_position < 0: # Adopting a SHORT Position
+            # TODO: implement SHORT
+            return [0,0], 0, 0
+        else: # OUT of ALL POSITIONS
+            btc_wallet_variaton = - self.long_position
+            new_long_wallet, money_variaton,long_variation_eur = self.__handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
+                        btc_price=btc_price)
+            # TODO: implement SHORT
+            return new_long_wallet, money_variaton, long_variation_eur
+
+    def __get_new_state(self):
         starting_id = self.ep_timestep - self.window_size
         if starting_id >= 0:
             windowed_close_data = self.ep_data['close'].values[starting_id:self.ep_timestep+1] 
@@ -152,33 +271,7 @@ class BTCMarket_Env():
             state.append(self.sigmoid(self.windowed_money[i+1] - self.windowed_money[i]))
             state.append(windowed_rsi_data[i]/100)
         #state.append(money)
-        state = np.array([np.nan_to_num(state)])
-        # Compute Reward
-        # reward = self.compute_reward(state, action, actual_price)
-        reward = self.compute_utility(state, action, actual_price)
-        # Change on inventory after reward, in case we sell
-        if btc_wallet_variaton == -1:
-            # TODO: Change to fit continuos Act_space. At the moment: sell all BTC in wallet:
-            # TODO: We need to change inventory to fit selling only part of BTCs in wallet
-            # Should the BTC-Wallet be a FIFO?
-            self.inventory = []
-
-        # At the end of step: necessary updates to internal params
-        self.money_available += money_variaton
-        self.btc_wallet += btc_units
-        self.wallet_value = self.money_available + btc_invest
-        # Check if Episode is Done
-        if self.ep_timestep == self.episode_length - 1:
-            done = True
-        else:
-            done = False
-            # self.memory.append((state, action, reward, next_state, done))
-            self.windowed_money.pop(0)
-            # windowed_money.append(self.money_available)
-            self.windowed_money.append(self.wallet_value)
-            self.ep_timestep+=1
-
-        return state, reward, done
+        return np.array([np.nan_to_num(state)])
 
     def step_continous_btc(self, 
             action: np.ndarray, 
@@ -248,37 +341,10 @@ class BTCMarket_Env():
                         average_price,
                         btc_units))
         
-
-
-
         # else btc_wallet_variaton == last_variation --> hold/wait
 
         # Compute State s(t+1)
-        starting_id = self.ep_timestep - self.window_size
-        if starting_id >= 0:
-            windowed_close_data = self.ep_data['close'].values[starting_id:self.ep_timestep+1]
-            windowed_hist_data = self.ep_data['histogram'].values[starting_id:self.ep_timestep+1]
-            windowed_ema_data = self.ep_data['50ema'].values[starting_id:self.ep_timestep+1]
-            windowed_rsi_data = self.ep_data['rsi14'].values[starting_id:self.ep_timestep+1]
-        else:
-            windowed_close_data = [self.ep_data['close'].values[0]]*abs(starting_id) \
-                    + list(self.ep_data['close'].values[0:self.ep_timestep+1])
-            windowed_hist_data = [self.ep_data['histogram'].values[0]]*abs(starting_id) \
-                    + list(self.ep_data['histogram'].values[0:self.ep_timestep+1])
-            windowed_ema_data = [self.ep_data['50ema'].values[0]]*abs(starting_id) \
-                    + list(self.ep_data['50ema'].values[0:self.ep_timestep+1])
-            windowed_rsi_data = [self.ep_data['rsi14'].values[0]]*abs(starting_id) \
-                    + list(self.ep_data['rsi14'].values[0:self.ep_timestep+1])
-
-        state = []
-        for i in range(self.window_size):
-            state.append(self.sigmoid(windowed_close_data[i+1] - windowed_close_data[i]))
-            state.append(self.sigmoid(windowed_hist_data[i]))
-            state.append(self.sigmoid(windowed_ema_data[i+1] - windowed_ema_data[i]))
-            state.append(self.sigmoid(self.windowed_money[i+1] - self.windowed_money[i]))
-            state.append(windowed_rsi_data[i]/100)
-        #state.append(money)
-        state = np.array([np.nan_to_num(state)])
+        state = self.__get_new_state()
         # Compute Reward
         reward = self.compute_reward_sterling_ratio(state, action, actual_price)
 

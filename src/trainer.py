@@ -110,9 +110,9 @@ class Trainer():
         elif act == 2:
             btc_change = 1
         elif act == 3:
-            btc_change = -1
-        else:
             btc_change = 0
+        else:
+            btc_change = self.env.long_position
 
         return act, btc_change
 
