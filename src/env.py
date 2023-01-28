@@ -201,6 +201,8 @@ class BTCMarket_Env():
         btc_partly_invest = 0
         btc_units = 0
         self.money_fiktiv = np.append(self.money_fiktiv, self.wallet_value)
+        # TODO: money_fiktive is like wallet_value, why the double variable? 
+        # TODO: why always appending? 
         '''
         1: maximal buy in
         0: no position
