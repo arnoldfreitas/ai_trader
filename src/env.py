@@ -127,12 +127,12 @@ class BTCMarket_Env():
 
         actual_price = self.ep_data['close'].values[self.ep_timestep]
         # Compute Wallet States
-        new_long_wallet , money_variaton, btc_eur_invest = self.__handle_position(
+        new_long_wallet , money_variaton, btc_eur_invest = self._handle_position(
                         new_position=action[0], 
                         btc_price=actual_price)
          
         # Compute State s(t+1)
-        state = self.__get_new_state()
+        state = self._get_new_state()
         
         # Compute Reward
         reward = self.compute_reward_from_tutor(state, action, actual_price)
@@ -160,7 +160,7 @@ class BTCMarket_Env():
 
         return state, reward, done
 
-    def __handle_long_position(self,
+    def _handle_long_position(self,
             btc_wallet_variaton:float, 
             btc_price:float):
         """
@@ -190,9 +190,13 @@ class BTCMarket_Env():
         # [units of btc] Amount of BTC bought with long_invest_eur
         long_variation_units_BTC = long_variation_eur / btc_price
         # [euros] Actual amount of euros that go out of wallet
-        money_variation = -long_variation_eur*(1+self.trading_fee)
+        fee_paid = abs(long_variation_eur*self.trading_fee)
+        money_variation = -long_variation_eur-fee_paid
         new_amount_btc_in_wallet = self.long_wallet[0] + long_variation_units_BTC
-        new_avg_price_btc_in_wallet = (self.long_wallet[1]*self.long_wallet[0] + long_variation_eur) / new_amount_btc_in_wallet
+        if new_amount_btc_in_wallet == 0:
+            new_avg_price_btc_in_wallet = 0.0
+        else:    
+            new_avg_price_btc_in_wallet = (self.long_wallet[1]*self.long_wallet[0] + long_variation_eur) / new_amount_btc_in_wallet
         # self.long_wallet = [new_amount_btc_in_wallet, new_avg_price_btc_in_wallet]
         if (btc_wallet_variaton > 0): # BUY
             self.buy_long_count += 1
@@ -224,11 +228,11 @@ class BTCMarket_Env():
             return self.long_wallet, \
                         money_variation, long_variation_eur
     
-    def __handle_position(self, 
+    def _handle_position(self, 
             new_position:float, 
             btc_price:float)->None:
         """
-        Paramters:
+        Parameters:
         ----------
         new_position:float 
             action[0]
@@ -238,10 +242,11 @@ class BTCMarket_Env():
         #TODO: Step implemented to only handle longs
 
         if new_position > 0: # Adopting a LONG Position
+            new_position = np.clip(new_position, 0,1)
             btc_wallet_variaton = new_position - self.long_position
             if abs(btc_wallet_variaton) > 1:
                 print(f"btc_wallet_variaton > 1: {btc_wallet_variaton}")
-            new_long_wallet , money_variaton, long_variation_eur = self.__handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
+            new_long_wallet , money_variaton, long_variation_eur = self._handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
                         btc_price=btc_price)
             return new_long_wallet, money_variaton, long_variation_eur
 
@@ -250,12 +255,12 @@ class BTCMarket_Env():
             return [0,0], 0, 0
         else: # OUT of ALL POSITIONS
             btc_wallet_variaton = - self.long_position
-            new_long_wallet, money_variaton,long_variation_eur = self.__handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
+            new_long_wallet, money_variaton,long_variation_eur = self._handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
                         btc_price=btc_price)
             # TODO: implement SHORT
             return new_long_wallet, money_variaton, long_variation_eur
 
-    def __get_new_state(self):
+    def _get_new_state(self):
         starting_id = self.ep_timestep - self.window_size
         if starting_id >= 0:
             windowed_close_data = self.ep_data['close'].values[starting_id:self.ep_timestep+1] 
@@ -353,7 +358,7 @@ class BTCMarket_Env():
         # else btc_wallet_variaton == last_variation --> hold/wait
 
         # Compute State s(t+1)
-        state = self.__get_new_state()
+        state = self._get_new_state()
         # Compute Reward
         reward = self.compute_reward_sterling_ratio(state, action, actual_price)
 
