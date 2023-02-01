@@ -59,8 +59,12 @@ class BTCMarket_Env():
 
         # Params for logging
         time_str=datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.log_folder=os.path.abspath(os.path.join(self.data_path, time_str, RL_Algo))
+        self.log_folder=os.path.abspath(os.path.join(self.data_path, 
+                                        time_str, RL_Algo))
         self.log_dict = None
+
+    def _update_log_folder(self, new_log_folder):
+        self.log_folder=os.path.abspath(new_log_folder)
 
     def reset(self) -> None:
         """
@@ -212,7 +216,6 @@ class BTCMarket_Env():
         """
         Save log dict to CSV
         """
-        
         os.makedirs(self.log_folder, exist_ok=True)
         
         df = pd.DataFrame.from_dict(self.log_dict)
@@ -343,7 +346,7 @@ class BTCMarket_Env():
             state.append(self.sigmoid(self.windowed_money[i+1] - self.windowed_money[i]))
             state.append(windowed_rsi_data[i]/100)
         #state.append(money)
-        return np.nan_to_num(state)
+        return np.array([np.nan_to_num(state)])
 
     def step_continous_btc(self, 
             action: np.ndarray, 

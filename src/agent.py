@@ -85,18 +85,19 @@ class Trader_Agent():
         self.epsilon_decay = epsilon_decay 
 
         # Model Params. Build/Load Model
-        self.model_name = model_name
-        if (load_model is not None) and (isinstance(load_model, str)):
-            try:
-                self.model = self.load_model()
-            except:
-                print('Model loading failed:')
-                print(traceback.print_exc())
-                self.model=self.build_model()
-        else:
-            self.model=self.build_model()
+        # Moving this part for trainer so it can be controlled from outside
+        # self.model_name = model_name
+        # if (load_model is not None) and (isinstance(load_model, str)):
+        #     try:
+        #         self.load_model()
+        #     except:
+        #         print('Model loading failed:')
+        #         print(traceback.print_exc())
+        #         self.build_model()
+        # else:
+        #     self.build_model()
 
-    def build_model(self, learning_rate=1e-3):
+    def build_model(self, learning_rate=1e-3, loss_function='mse'):
         """
         Build Policy model with predefined architecture.
 
@@ -130,21 +131,19 @@ class Trader_Agent():
             # for BTC: "sigmoid"; action_domain in (0, 1)
             layer_output = 'sigmoid'
 
-        model = keras.models.Sequential([        
-            keras.Input(shape=(self.state_size,)),
-            keras.layers.Dense(units=256, activation='relu'), ## üerprüfen
+        model = keras.models.Sequential([
+            keras.layers.InputLayer(input_shape=(self.state_size*self.window_size,)),
+            keras.layers.Dense(units=256, activation='relu'),
             keras.layers.Dense(units=128, activation='relu'),
             keras.layers.Dense(units=64, activation='relu'),
             keras.layers.Dense(units=self.action_space, activation=layer_output)
             ])
 
         #TODO: Build RNN (LSTM) as policy network
-
-        custom_loss_func = loss_function 
-
-        model.compile(loss=custom_loss_func, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
+        model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
+        model.summary()
         
-        return model
+        self.model = model
     
     def load_model(self, model_path: str):
         """
@@ -172,7 +171,7 @@ class Trader_Agent():
 
         print("model: ai_trade_{}_{} loaded. Eplison set to {}.".format(
                 load_date,load_epi,self.epsilon))
-        return model
+        self.model = model
 
     def compute_action(self, state: np.ndarray) ->  float:
         """
@@ -192,11 +191,11 @@ class Trader_Agent():
                 action.append(random.uniform(*self.action_domain))
             return np.array(action)
       
-        action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size)),verbose = 0)
+        action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size*self.window_size)),verbose = 0)
 
         # round computed value to one decimal point
         # leaving decision about rounding for trainer
-        return action_val.numpy()
+        return action_val
 
     def update_epsilon(self, increase_epsilon: float = 0.0):
         if increase_epsilon > 0.0:
