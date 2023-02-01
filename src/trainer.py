@@ -74,9 +74,6 @@ class Trainer():
 
         # Loop over every episode
         # for episode in range(1):
-        tmp_log_state = []
-        tmp_log_action = []
-        tmp_log_reward = []
         for episode in range(1, n_episodes + 1):
             print("Episode: {}/{}".format(episode, n_episodes))
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
@@ -101,25 +98,10 @@ class Trainer():
                     action = self.agent.compute_action(state)
                     dqn_action = self.transforme_to_dqn_action(action)
                     next_state, reward, done = self.env.step(action=dqn_action)
-
-                    tmp_log_action.append(dqn_action[-1])
-                    # tmp_log_state.append(state[19])
-                    tmp_log_state.append(self.env.long_position)
-                    tmp_log_reward.append(reward)
                     state = next_state
-                    if done:    
+                    if done:
+                        env.log_episode_to_file(episode=episode, run=run)    
                         break
-
-        fig,ax = plt.subplots(3,1)
-        # print(f"{type(tmp_log_state)}, {tmp_log_state[0][0]}")
-        # print(f"{tmp_log_state[0]}")
-        # print(f"{tmp_log_state[0][0]}")
-        ax[0].plot(tmp_log_state)
-        ax[1].plot(tmp_log_action)
-        ax[2].plot(tmp_log_reward)
-        plt.title('testing')
-        plt.show()
-        # plt.close()
 
 
     def transforme_to_dqn_action(self, actions):

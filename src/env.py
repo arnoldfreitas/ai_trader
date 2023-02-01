@@ -3,6 +3,7 @@ import pandas as pd
 import random
 import math
 import os
+from datetime import datetime
 import tensorflow as tf
 from tensorflow import keras
 from typing import Tuple, List
@@ -19,18 +20,17 @@ class BTCMarket_Env():
                 start_money: float,
                 trading_fee: float = 0,
                 asset: str = 'BTC',
-                onefile: bool = False,
                 ep_period: int = 2*24*14,
                 ep_data_cols: List[str]=['close','histogram','50ema','rsi14'],
                 RL_Algo: str = 'DQN',
-                data_path: str ='./../data',) -> None:
+                data_path: str ='./../data/',) -> None:
         """
         Receive arguments and initialise the  class params.
         """
         # General Information Params
         self.ep_count = 0
         self.data_path = data_path
-        self.data_source = self.load_data(onefile, asset)[0]
+        self.data_source = self.load_data(asset)
         self.len_source = len(self.data_source)
         # print(f"{type(self.data_source), type(self.data_source[0])}")
         # print(f"self.len_source: {self.len_source}")
@@ -56,6 +56,11 @@ class BTCMarket_Env():
         self.ep_data_cols = ep_data_cols
         self.episode_length = 0
         self.ep_data = None
+
+        # Params for logging
+        time_str=datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.log_folder=os.path.abspath(os.path.join(self.data_path, time_str, RL_Algo))
+        self.log_dict = None
 
     def reset(self) -> None:
         """
@@ -97,6 +102,9 @@ class BTCMarket_Env():
         self.sell_long_count: float = 0
         self.buy_short_count: float = 0
         self.sell_short_count: float = 0
+
+        # Init Logging
+        self.log_dict = self.init_logging_dict()
 
     def step(self, 
             action: np.ndarray, # value in [-1,1] representing position of bitcoin to have in wallet on t+1
@@ -146,19 +154,69 @@ class BTCMarket_Env():
                 print(f"Value no Expected after action:\n \
         action: {action[0]} ; {test_action}; {self.long_position}")
         self.long_position = test_action
+            
+        self.windowed_money.pop(0)
+        # windowed_money.append(self.money_available)
+        self.windowed_money.append(self.wallet_value)
+        self.ep_timestep+=1
+        
         # Check if Episode is Done
         if self.ep_timestep == self.episode_length - 1:
         # if self.ep_timestep > 5:
             done = True
         else:
             done = False
-            # self.memory.append((state, action, reward, next_state, done))
-            self.windowed_money.pop(0)
-            # windowed_money.append(self.money_available)
-            self.windowed_money.append(self.wallet_value)
-            self.ep_timestep+=1
+    
+        # Log Episode Step to log_dict
+        self.log_episode_step(action = action, state = state, 
+                reward = reward, done = done, closing_price = actual_price, 
+                fee_paid = abs(btc_eur_invest*self.trading_fee), 
+                btc_units = new_long_wallet[0], 
+                btc_eur= new_long_wallet[0]*new_long_wallet[1])
 
         return state, reward, done
+
+    def init_logging_dict(self) -> dict:
+        self.log_cols=['episode', 'action', 'state', 'reward', 'done','money',
+            'btc_units','btc_eur','fee_paid', 'btc_price',  'long_wallet', 'short_wallet', 'wallet_value', 'long_position', 'short_position', 'buy_long_count', 
+            'sell_long_count', 'buy_short_count', 'sell_short_count']
+        return dict.fromkeys(self.log_cols, [])
+
+    def log_episode_step(self, action, state, reward, done, 
+                    closing_price, fee_paid, btc_units, btc_eur):
+        """
+        Add params to log dict
+        """
+        self.log_dict['episode'].append(self.ep_count)
+        # self.log_dict['run'].append(0)
+        self.log_dict['action'].append(action)
+        self.log_dict['state'].append(state)
+        self.log_dict['reward'].append(reward)
+        self.log_dict['done'].append(done)
+        self.log_dict['money'].append(self.money_available)
+        self.log_dict['btc_units'].append(btc_units)
+        self.log_dict['btc_eur'].append(btc_eur)
+        self.log_dict['long_wallet'].append(self.long_wallet)
+        self.log_dict['short_wallet'].append(self.short_wallet)
+        self.log_dict['wallet_value'].append(self.wallet_value)
+        self.log_dict['long_position'].append(self.long_position)
+        self.log_dict['fee_paid'].append(fee_paid)
+        self.log_dict['btc_price'].append(closing_price)
+        self.log_dict['short_position'].append(self.short_position)
+        self.log_dict['buy_long_count'].append(self.buy_long_count)
+        self.log_dict['sell_long_count'].append(self.sell_long_count)
+        self.log_dict['buy_short_count'].append(self.buy_short_count)
+        self.log_dict['sell_short_count'].append(self.sell_short_count)
+
+    def log_episode_to_file(self,episode=0,run=0):
+        """
+        Save log dict to CSV
+        """
+        
+        os.makedirs(self.log_folder, exist_ok=True)
+        
+        df = pd.DataFrame.from_dict(self.log_dict)
+        df.to_csv(self.log_folder + f"/Epi_{episode}_run_{run}.csv")
 
     def _handle_long_position(self,
             btc_wallet_variaton:float, 
@@ -510,20 +568,20 @@ class BTCMarket_Env():
         start=random.randint(0,len(data_in)-period)
         return data_in.iloc[start:start+period,:] 
  
-    def load_data(self, onefile=False,asset=None):
+    def load_data(self,asset=None,
+            onefile=False, # kept for retro compatibility 
+            ):
         out=[]
         for file in os.listdir('./../data'):
             if asset is not None and asset not in file:
                 continue
             if 'histData_dt1800.0s' in file:
                 out.append(pd.read_csv('./../data/'+file))
-        if onefile:
-            out_df=pd.DataFrame(columns=out[0].columns)
-            for item in out:
-                out_df=pd.concat([out_df,item])
-            return out_df
-        else:
-            return out
+        
+        out_df=pd.DataFrame(columns=out[0].columns)
+        for item in out:
+            out_df=pd.concat([out_df,item])
+        return out_df
 
     @staticmethod 
     def stock_price_format(n):
