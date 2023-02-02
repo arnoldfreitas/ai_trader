@@ -16,7 +16,7 @@ from agent import Trader_Agent
 from collections import deque
 
 
-class Trainer():
+class DRLTrainer():
     '''
     Trainer class
 
@@ -27,7 +27,7 @@ class Trainer():
                 action_space: tuple,
                 batch_size: int,
                 gamma: float = 0.95,
-                algorithm: str = 'DQN',
+                algorithm: str = 'DRL',
                 data_path: str ='./../data',) -> None:
         """
         Receive arguments and initialise the  class params.
