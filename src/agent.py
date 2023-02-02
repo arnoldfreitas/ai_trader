@@ -10,20 +10,21 @@ from tensorflow import keras
 from typing import Tuple
 from env import BTCMarket_Env
 
-def loss_function(y_true, y_pred):
-    '''
-    Function to compute loss for gradient ascent.
+class LossFunctions:
+    def loss_function(y_true, y_pred):
+        '''
+        Function to compute loss for gradient ascent.
 
-    action is of shape (4)
-    y_true = np.array([reward] * 4)
+        action is of shape (4)
+        y_true = np.array([reward] * 4)
 
-    y_true: we can compute, therefore we set as reward. Shape must be equal action shape.
-    y_pred: actions from policy NN given through fit.
-    '''
-    # Loss function has to be negative in order to perform gradient ascent
-    loss = - y_true[0]
+        y_true: we can compute, therefore we set as reward. Shape must be equal action shape.
+        y_pred: actions from policy NN given through fit.
+        '''
+        # Loss function has to be negative in order to perform gradient ascent
+        loss = - y_true[0]
 
-    return loss
+        return loss
 
 class Trader_Agent():
     '''

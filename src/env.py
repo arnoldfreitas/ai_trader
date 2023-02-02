@@ -93,9 +93,9 @@ class BTCMarket_Env():
         self.long_wallet: list = [0, 0] # [units of longs, mean_price_bought]
         # Absolute amount of BTCs-Short in wallet
         self.short_wallet: list = [0, 0] # [units of shorts, mean_price_sold] 
-        # money_available + BTC_price * self.long_wallet + BTC_Price*self.short_wallet
+        # wallet_value = money_available + BTC_price * self.long_wallet[0] + BTC_Price*self.short_wallet[0]
         self.wallet_value: float = self.start_money # [euros]:
-        # TODO: why money_fiktiv? 
+        # TODO: why money_fiktiv? : wallet value for all every time step played so far
         self.money_fiktiv: list = np.array([self.wallet_value]) # [euros]
         # position on btc in percentage of wallet value
         self.long_position: float = 0 # [%]: (self.long_wallet*BTC.price) / self.wallet_value[-1]
@@ -153,6 +153,7 @@ class BTCMarket_Env():
         self.money_available += money_variaton
         self.long_wallet = new_long_wallet
         self.wallet_value = self.money_available + new_long_wallet[0]*new_long_wallet[1]
+        self.money_fiktiv = np.append(self.money_fiktiv, self.wallet_value)
         test_action = new_long_wallet[0]*new_long_wallet[1]/ self.wallet_value 
         if not( abs(test_action - action[0]) < 1e-2 ):
                 print(f"Value no Expected after action:\n \
@@ -182,7 +183,8 @@ class BTCMarket_Env():
 
     def init_logging_dict(self) -> dict:
         self.log_cols=['episode', 'action', 'state', 'reward', 'done','money',
-            'btc_units','btc_eur','fee_paid', 'btc_price',  'long_wallet', 'short_wallet', 'wallet_value', 'long_position', 'short_position', 'buy_long_count', 
+            'btc_units','btc_eur','fee_paid', 'btc_price',  'long_wallet', 'short_wallet', 
+            'wallet_value', 'long_position', 'short_position', 'buy_long_count', 
             'sell_long_count', 'buy_short_count', 'sell_short_count']
         return dict.fromkeys(self.log_cols, [])
 
@@ -301,9 +303,11 @@ class BTCMarket_Env():
             Price of bitcoin at t
         """
         #TODO: Step implemented to only handle longs
+        #TODO: Still not handling the case we have no money to pay fees after trade.
+        #TODO: Still not handling the case we have shorts and move to long or the other way around
 
         if new_position > 0: # Adopting a LONG Position
-            new_position = np.clip(new_position, 0,1)
+            new_position = np.clip(new_position, 0, 1)
             btc_wallet_variaton = new_position - self.long_position
             if abs(btc_wallet_variaton) > 1:
                 print(f"btc_wallet_variaton > 1: {btc_wallet_variaton}")
@@ -318,7 +322,7 @@ class BTCMarket_Env():
             btc_wallet_variaton = - self.long_position
             new_long_wallet, money_variaton,long_variation_eur = self._handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
                         btc_price=btc_price)
-            # TODO: implement SHORT
+            # TODO: implement for SHORT
             return new_long_wallet, money_variaton, long_variation_eur
 
     def _get_new_state(self):
@@ -548,7 +552,6 @@ class BTCMarket_Env():
             wallet_new = self.wallet_value - state[-5] / actual_price * self.money_available # profit der gemacht hätte werden können
             # state[-5] gibt veränderung btc kurs von t zu t+1 an. -> prozentuale veränderung berechnen & mit money_available verrechnen
             # MINUS: weil chance verpasst. Wenn kurs gefallen ist, ist state[-5] negativ -> wallet wird größer -> höherer reward, da wait gute aktion war
-
 
         fikitv_new = np.append(self.money_fiktiv, wallet_new)
         cummulative_return = (wallet_new - self.start_money) / self.start_money
