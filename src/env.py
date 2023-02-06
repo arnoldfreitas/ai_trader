@@ -425,6 +425,7 @@ class BTCMarket_Env():
                 if new_position == 0:
                     return self.long_wallet, new_short_wallet, money_variaton, trading_fee_sell
                 self.short_wallet = new_short_wallet
+                self.short_position = 0
             elif self.short_position == 0 and self.long_position:
                 # sell all and keep going with rest of the function
                 btc_wallet_variaton = - self.long_position
@@ -434,6 +435,7 @@ class BTCMarket_Env():
                 if new_position == 0:
                     return new_long_wallet, self.short_wallet, money_variaton, trading_fee_sell
                 self.long_wallet = new_long_wallet
+                self.long_position = 0
             else: #case: WAIT, we havent been invested and want to stay NOT INVESTED
                 return [0,0], [0,0], 0, 0
 
@@ -445,13 +447,14 @@ class BTCMarket_Env():
         if new_position > 0: # Adopting a LONG Position
             # only compute new btc_variation if we are already long. If we were short before, we coputed this value already above
             if self.long_position > 0:
-                # self.log_position is the last position we adopted. Imagine the position last timestep was 0.4. If the btc_price rised, 
+                # self.long_position is the last position we adopted. Imagine the position last timestep was 0.4. If the btc_price rised, 
                 # the position in compare to our wallet value got "bigger" by percent (e.g. 0.44).
                 # We allow our network to give actions with 1 decimal point only. When do we hold??
-                if (new_position - self.long_wallet[0]*btc_price) < 1e-1:
+                if (new_position - (self.long_wallet[0]*btc_price) / self.wallet_value) < 1e-1:
                     btc_wallet_variaton = 0 # in case the change in investment is smaller than 0.1% of wallet_value, we hold
                 else:
-                    btc_wallet_variaton = new_position - round(self.long_wallet[0]*btc_price, 3) ### round, that invest doesnt get too small
+                    btc_wallet_variaton = new_position - round((self.long_wallet[0]*btc_price) / self.wallet_value, 3) ### round, that invest doesnt get too small
+
             if abs(btc_wallet_variaton) > 1:
                 print(f"btc_wallet_variaton > 1: {btc_wallet_variaton}")
             new_long_wallet, money_variaton, trading_fee = self._handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
@@ -465,10 +468,10 @@ class BTCMarket_Env():
             new_position = -new_position
             # compute btc_wallet_variation, if we are already short and want to buy more short or sell some shorts 
             if self.short_position > 0:
-                if (new_position - self.short_wallet[0]*btc_price) < 1e-1:
+                if (new_position - (self.short_wallet[0]*btc_price) / self.wallet_value) < 1e-1:
                     btc_wallet_variaton = 0 # in case the change in investment is smaller than 0.1% of wallet_value, we hold
                 else:
-                    btc_wallet_variaton = new_position - round(self.short_wallet[0]*btc_price, 3)
+                    btc_wallet_variaton = new_position - round((self.short_wallet[0]*btc_price) / self.wallet_value, 3)
             if abs(btc_wallet_variaton) > 1:
                 print(f"btc_wallet_variaton > 1: {btc_wallet_variaton}")
             new_short_wallet, money_variaton, trading_fee = self._handle_short_position(btc_wallet_variaton=btc_wallet_variaton, 
