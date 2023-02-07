@@ -94,7 +94,7 @@ class BTCMarket_Env():
         # Absolute amount of BTCs-Short in wallet
         self.short_wallet: list = [0, 0] # [units of shorts, mean_price_sold] 
         # wallet_value = money_available + BTC_price * self.long_wallet[0] + BTC_Price*self.short_wallet[0]
-        self.wallet_value: float = self.start_money # [euros]:
+        self.wallet_value = self.start_money + self.long_wallet[0]*self.long_wallet[1] + self.short_wallet[0]*self.short_wallet[1] # [euros]
         # position on btc in percentage of wallet value
         self.long_position: float = 0 # [%]: (self.long_wallet*BTC.price) / self.wallet_value[-1]
         self.short_position: float = 0 # [%]: (self.short_wallet*BTC.price) / self.wallet_value[-1]
@@ -140,13 +140,13 @@ class BTCMarket_Env():
         # Change short/long position to actual_price in compare to wallet_value
         if self.long_position != 0 and self.short_position == 0:
             self.wallet_value = self.money_available + self.long_wallet[0]*actual_price
-            self.long_position == self.long_wallet[0]*actual_price / self.wallet_value
+            self.long_position = self.long_wallet[0]*actual_price / self.wallet_value
         elif self.short_position != 0 and self.long_position == 0:
             self.wallet_value = self.money_available + self.short_wallet[0]*actual_price
-            self.short_position == self.short_wallet[0]*actual_price / self.wallet_value
+            self.short_position = self.short_wallet[0]*actual_price / self.wallet_value
 
         # Compute Wallet States
-        new_long_wallet, new_short_wallet, money_variaton, trading_fee = self._handle_position(
+        new_long_wallet, new_short_wallet, money_variation, trading_fee = self._handle_position(
                         new_position=action[0], 
                         btc_price=actual_price)
          
@@ -157,7 +157,7 @@ class BTCMarket_Env():
         reward = self.compute_reward_from_tutor(state, action, actual_price)
 
         # At the end of step: necessary updates to internal params
-        self.money_available += money_variaton
+        self.money_available += money_variation
         self.long_wallet = new_long_wallet
         self.short_wallet = new_short_wallet
         # True wallet_value, either long or short will be 0
@@ -168,7 +168,7 @@ class BTCMarket_Env():
         test_action = new_long_wallet[0] * actual_price / self.wallet_value \
             + new_short_wallet[0] * actual_price / self.wallet_value # long or short will be zero
         if not( abs(test_action - action[0]) < 1e-2 ):
-                print(f"Value not Expected after action:\n \
+                print(f"Value nott Expected after action:\n \
         action: {action[0]} ; {test_action}; {self.long_position + self.short_position}")
         
         # Both positions have to be upgraded in case we sold and bought in one step
@@ -239,11 +239,18 @@ class BTCMarket_Env():
         df.to_csv(self.log_folder + f"/Epi_{episode}_run_{run}.csv")
 
     def _handle_long_position(self,
-            btc_wallet_variaton:float, 
-            btc_price:float):
+            btc_wallet_variation:float, 
+            btc_price:float,
+            new_position:float, 
+            ):
         """
         Notes
         -----
+        Action Defines how much % of wallet invested in Crypto we need to have at the end of this step.
+        The amount to be traded depends on the fee, because the fee reduce the value of wallet, but
+        the fee by itself depends on the amount to be traded, thus the value of btc at the end of step is computed by:
+            btc_in_wallet_at_end_of_step = (new_position*(wallet_value + np.sign(btc_wallet_variation) * fee_rate * value_of_btc_in_wallet)) / 
+                                        (1+np.sign(btc_wallet_variation) * fee_rate*new_position) 
         Information about inner params:
             long_variation_eur & long_variation_units_BTC > 0
                 & money_variation < 0: Buy
@@ -254,52 +261,49 @@ class BTCMarket_Env():
 
         Paramters:
         ----------
-        btc_wallet_variaton:float 
+        btc_wallet_variation:float 
             Variation in wallet.
-            btc_wallet_variaton < 0: Buy
-            btc_wallet_variaton > 0: Sell
-            btc_wallet_variaton == 0: Hold
+            btc_wallet_variation > 0: Buy
+            btc_wallet_variation < 0: Sell
+            btc_wallet_variation == 0: Hold
         btc_price:float
             Price of bitcoin at t
         """
-        # we have to differentiate if we sell or buy because of the trading fee
-        # if we sell, trading fee is on money_variation, if we buy, trading fee is on long_variation
-        # [euros] Amount of euros of BTC to invest in order to have the given final position
-        if btc_wallet_variaton < 0: # case: sell longs
-            long_variation_eur = (btc_wallet_variaton * self.wallet_value)
-            # [units of btc] Amount of BTC sold with long_invest_eur
-            long_variation_units_BTC = long_variation_eur / btc_price
-            # [euros] Actual amount of euros that go out of or into wallet
-            money_variation = -(long_variation_eur*(1-self.trading_fee))
-
-        else: # case: buy longs
-            long_variation_eur = (btc_wallet_variaton * self.wallet_value)*(1-self.trading_fee)
-            # [units of btc] Amount of BTC bought with long_invest_eur
-            long_variation_units_BTC = long_variation_eur / btc_price
-            # [euros] Actual amount of euros that go out of or into wallet
-            money_variation = -(btc_wallet_variaton * self.wallet_value)
-
-        trading_fee = abs(btc_wallet_variaton*self.wallet_value*self.trading_fee)
+        #  [euros] Amount of euros of BTC to at end of step
+        long_at_end_of_step = (new_position * \
+            (self.wallet_value + np.sign(btc_wallet_variation) * self.trading_fee * self.long_position * self.wallet_value)) / \
+                                        (1+np.sign(btc_wallet_variation) * self.trading_fee * new_position) 
+        #  [euros] Amount of euros of BTC to trade in order to have the given final position
+        long_variation_eur = long_at_end_of_step - self.long_position*self.wallet_value
+        # [units of btc] Amount of BTC bought with long_invest_eur
+        long_variation_units_BTC = long_variation_eur / btc_price
+        # Fees paid
+        trading_fee = abs(long_variation_eur*self.trading_fee)
+        # [euros] Actual amount of euros that go out of or into wallet
+        money_variation = - long_variation_eur - trading_fee
+        
         new_amount_btc_in_wallet = self.long_wallet[0] + long_variation_units_BTC
-        if new_amount_btc_in_wallet == 0:
-            new_avg_price_btc_in_wallet = 0.0 # Why?
+        if new_amount_btc_in_wallet < 1e-3:
+            new_avg_price_btc_in_wallet = 0.0 
         else:    
             new_avg_price_btc_in_wallet = (self.long_wallet[1]*self.long_wallet[0] + long_variation_eur) / new_amount_btc_in_wallet
         # self.long_wallet = [new_amount_btc_in_wallet, new_avg_price_btc_in_wallet]
-        if (btc_wallet_variaton > 0): # BUY
+        if (btc_wallet_variation > 1e-3): # BUY
             self.buy_long_count += 1
             if not(money_variation <  0 ) or not(long_variation_eur > 0):
-                print(f"Value no Expected for holding position:\n \
+                print(f"Value not Expected for buy position:\n \
+        btc_wallet_variation ; {btc_wallet_variation}\n \
         money_variation: <0 ; {money_variation}\n \
         long_variation_eur: >0 ; {long_variation_eur}\n \
         new_amount_btc_in_wallet: {self.long_wallet[0]} ; {new_amount_btc_in_wallet}\n \
         new_avg_price_btc_in_wallet: {self.long_wallet[1]} ; {new_avg_price_btc_in_wallet}\n")
             return [new_amount_btc_in_wallet, new_avg_price_btc_in_wallet], \
                         money_variation, trading_fee
-        elif (btc_wallet_variaton < 0): # SELL
+        elif (btc_wallet_variation < -1e-3): # SELL
             self.sell_long_count += 1
             if not(money_variation >  0 ) or not(long_variation_eur < 0):
-                print(f"Value no Expected for holding position:\n \
+                print(f"Value not Expected for sell position:\n \
+        btc_wallet_variation ; {btc_wallet_variation}\n \
         money_variation: >0 ; {money_variation}\n \
         long_variation_eur: <0 ; {long_variation_eur}\n \
         new_amount_btc_in_wallet: {self.long_wallet[0]} ; {new_amount_btc_in_wallet}\n \
@@ -307,8 +311,9 @@ class BTCMarket_Env():
             return [new_amount_btc_in_wallet, new_avg_price_btc_in_wallet], \
                         money_variation, trading_fee
         else: # HOLD
-            if not(money_variation == 0 )or not(long_variation_eur == 0):
-                print(f"Value no Expected for holding position:\n \
+            if not(abs(money_variation) <1e-3 ) or not(abs(long_variation_eur) < 1e-3):
+                print(f"Value not Expected for holding position:\n \
+        btc_wallet_variation ; {btc_wallet_variation}\n \
         money_variation: 0 ; {money_variation}\n \
         long_variation_eur: 0 ; {long_variation_eur}\n \
         new_amount_btc_in_wallet: {self.long_wallet[0]} ; {new_amount_btc_in_wallet}\n \
@@ -317,8 +322,9 @@ class BTCMarket_Env():
                         money_variation, trading_fee
 
     def _handle_short_position(self,
-            btc_wallet_variaton:float, 
-            btc_price:float):
+            btc_wallet_variation:float, 
+            btc_price:float,
+            new_position:float):
         """
         Notes
         -----
@@ -332,52 +338,47 @@ class BTCMarket_Env():
 
         Paramters:
         ----------
-        btc_wallet_variaton:float 
+        btc_wallet_variation:float 
             Variation in wallet.
-            btc_wallet_variaton < 0: Buy
-            btc_wallet_variaton > 0: Sell
-            btc_wallet_variaton == 0: Hold
+            btc_wallet_variation > 0: Buy
+            btc_wallet_variation < 0: Sell
+            btc_wallet_variation == 0: Hold
         btc_price:float
             Price of bitcoin at t
         """
-        # we have to differentiate if we sell or buy because of the trading fee
-        # if we sell, trading fee is on money_variation, if we buy, trading fee is on long_variation
-        # [euros] Amount of euros of BTC to invest in order to have the given final position
-        if btc_wallet_variaton < 0: # case: sell shorts
-            short_variation_eur = (btc_wallet_variaton * self.wallet_value)
-            # [units of btc] Amount of BTC_shorts sold with short_variation_eur
-            short_variation_units_BTC = short_variation_eur / btc_price
-            # [euros] Actual amount of euros that go out of or into wallet
-            money_variation = -(short_variation_eur*(1-self.trading_fee))
+        #  [euros] Amount of euros of BTC to at end of step
+        short_at_end_of_step = (new_position * \
+            (self.wallet_value + np.sign(btc_wallet_variation) * self.trading_fee * self.short_position * self.wallet_value)) / \
+                                        (1+np.sign(btc_wallet_variation) * self.trading_fee * new_position) 
+        #  [euros] Amount of euros of BTC to trade in order to have the given final position
+        short_variation_eur = short_at_end_of_step - self.short_position*self.wallet_value
+        # [units of btc] Amount of BTC bought with short_invest_eur
+        short_variation_units_BTC = short_variation_eur / btc_price
+        # Fees paid
+        trading_fee = abs(short_variation_eur*self.trading_fee)
+        # [euros] Actual amount of euros that go out of or into wallet
+        money_variation = - btc_wallet_variation - trading_fee
 
-        else: # case: buy shorts
-            short_variation_eur = (btc_wallet_variaton * self.wallet_value)*(1-self.trading_fee)
-            # [units of btc] Amount of BTC bought with long_invest_eur
-            short_variation_units_BTC = short_variation_eur / btc_price
-            # [euros] Actual amount of euros that go out of or into wallet
-            money_variation = -(btc_wallet_variaton * self.wallet_value)
-
-        trading_fee = abs(btc_wallet_variaton*self.wallet_value*self.trading_fee)
         new_amount_btc_in_wallet = self.short_wallet[0] + short_variation_units_BTC
         if new_amount_btc_in_wallet == 0:
-            new_avg_price_btc_in_wallet = 0.0 # Why?
+            new_avg_price_btc_in_wallet = 0.0 
         else:    
             new_avg_price_btc_in_wallet = (self.short_wallet[1]*self.short_wallet[0] + short_variation_eur) / new_amount_btc_in_wallet
 
-        if (btc_wallet_variaton > 0): # BUY
+        if (btc_wallet_variation > 0): # BUY
             self.buy_short_count += 1
             if not(money_variation <  0 ) or not(short_variation_eur > 0):
-                print(f"Value no Expected for holding position:\n \
+                print(f"Value not Expected for holding position:\n \
         money_variation: <0 ; {money_variation}\n \
         short_variation_eur: >0 ; {short_variation_eur}\n \
         new_amount_btc_in_wallet: {self.short_wallet[0]} ; {new_amount_btc_in_wallet}\n \
         new_avg_price_btc_in_wallet: {self.short_wallet[1]} ; {new_avg_price_btc_in_wallet}\n")
             return [new_amount_btc_in_wallet, new_avg_price_btc_in_wallet], \
                         money_variation, trading_fee
-        elif (btc_wallet_variaton < 0): # SELL
+        elif (btc_wallet_variation < 0): # SELL
             self.buy_short_count += 1
             if not(money_variation >  0 ) or not(short_variation_eur < 0):
-                print(f"Value no Expected for holding position:\n \
+                print(f"Value not Expected for holding position:\n \
         money_variation: >0 ; {money_variation}\n \
         short_variation_eur: <0 ; {short_variation_eur}\n \
         new_amount_btc_in_wallet: {self.short_wallet[0]} ; {new_amount_btc_in_wallet}\n \
@@ -386,7 +387,7 @@ class BTCMarket_Env():
                         money_variation, trading_fee
         else: # HOLD
             if not(money_variation == 0 )or not(short_variation_eur == 0):
-                print(f"Value no Expected for holding position:\n \
+                print(f"Value not Expected for holding position:\n \
         money_variation: 0 ; {money_variation}\n \
         short_variation_eur: 0 ; {short_variation_eur}\n \
         new_amount_btc_in_wallet: {self.short_wallet[0]} ; {new_amount_btc_in_wallet}\n \
@@ -405,10 +406,10 @@ class BTCMarket_Env():
         btc_price:float
             Price of bitcoin at t
         """
-        #TODO: HOW DO WE LOG IN CASE WE HAVE TO SELL FIRST AND THEN BUY IN ONE STEP
+        #TODO: HOW DO WE LOG IN CASE WE HAVE TO SELL FIRST AND THEN BUY IN ONE STEP. I think should be no problem
         #TODO: 2 different prices for long and short? have to look this up and change in code if needed
         # Still not handling the case we have no money to pay fees after trade. ? impossible scenario, fees are payed from trade money
-        #TODO: Are the returns alright inside if and elif?
+        #TODO: Are the returns alright inside if and elif? yes if we make sure that for all situations there is a return
         #TODO: check case wait
 
         new_position = np.clip(new_position, -1, 1)
@@ -418,50 +419,50 @@ class BTCMarket_Env():
         if  new_position == 0 or (new_position > 0 and self.short_position > 0) or (new_position < 0 and self.long_position > 0):
             if self.long_position == 0 and self.short_position > 0:
                 # sell all shorts first. later in this function by longs with the amount of new_position
-                btc_wallet_variaton = - self.short_position
-                new_short_wallet, money_variaton, trading_fee_sell = self._handle_short_position(btc_wallet_variaton=btc_wallet_variaton, 
-                        btc_price=btc_price)
+                btc_wallet_variation = - self.short_position
+                new_short_wallet, money_variation, trading_fee_sell = self._handle_short_position(btc_wallet_variation=btc_wallet_variation, 
+                        btc_price=btc_price, new_position=new_position)
                 # If new_position = 0, return after we sold all
                 if new_position == 0:
-                    return self.long_wallet, new_short_wallet, money_variaton, trading_fee_sell
+                    return self.long_wallet, new_short_wallet, money_variation, trading_fee_sell
                 self.short_wallet = new_short_wallet
                 self.short_position = 0
-            elif self.short_position == 0 and self.long_position:
+            elif self.short_position == 0 and self.long_position > 0:
                 # sell all and keep going with rest of the function
-                btc_wallet_variaton = - self.long_position
-                new_long_wallet, money_variaton, trading_fee_sell = self._handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
-                        btc_price=btc_price)
+                btc_wallet_variation = - self.long_position
+                new_long_wallet, money_variation, trading_fee_sell = self._handle_long_position(btc_wallet_variation=btc_wallet_variation, 
+                        btc_price=btc_price, new_position=new_position)
                 # If new_position = 0, return after we sold all
                 if new_position == 0:
-                    return new_long_wallet, self.short_wallet, money_variaton, trading_fee_sell
+                    return new_long_wallet, self.short_wallet, money_variation, trading_fee_sell
                 self.long_wallet = new_long_wallet
                 self.long_position = 0
             else: #case: WAIT, we havent been invested and want to stay NOT INVESTED
                 return [0,0], [0,0], 0, 0
 
             # update parameters to current for further computations
-            self.money_available += money_variaton
+            # TODO: This is not good to update in here, this is computed before the reward, thus we influence the rewards.
+            self.money_available += money_variation
             self.wallet_value = self.money_available
-            btc_wallet_variaton = new_position
+            btc_wallet_variation = new_position
 
         if new_position > 0: # Adopting a LONG Position
             # only compute new btc_variation if we are already long. If we were short before, we coputed this value already above
-            if self.long_position > 0:
-                # self.long_position is the last position we adopted. Imagine the position last timestep was 0.4. If the btc_price rised, 
-                # the position in compare to our wallet value got "bigger" by percent (e.g. 0.44).
-                # We allow our network to give actions with 1 decimal point only. When do we hold??
-                if (new_position - (self.long_wallet[0]*btc_price) / self.wallet_value) < 1e-1:
-                    btc_wallet_variaton = 0 # in case the change in investment is smaller than 0.1% of wallet_value, we hold
-                else:
-                    btc_wallet_variaton = new_position - round((self.long_wallet[0]*btc_price) / self.wallet_value, 3) ### round, that invest doesnt get too small
+            # self.long_position is the last position we adopted. Imagine the position last timestep was 0.4. If the btc_price rised, 
+            # the position in compare to our wallet value got "bigger" by percent (e.g. 0.44).
+            # We allow our network to give actions with 1 decimal point only. When do we hold??
+            if (new_position - (self.long_wallet[0]*btc_price) / self.wallet_value) < 1e-1:
+                btc_wallet_variation = 0 # in case the change in investment is smaller than 0.1% of wallet_value, we hold
+            else:
+                btc_wallet_variation = new_position - round((self.long_wallet[0]*btc_price) / self.wallet_value, 3) ### round, that invest doesnt get too small
 
-            if abs(btc_wallet_variaton) > 1:
-                print(f"btc_wallet_variaton > 1: {btc_wallet_variaton}")
-            new_long_wallet, money_variaton, trading_fee = self._handle_long_position(btc_wallet_variaton=btc_wallet_variaton, 
-                        btc_price=btc_price)
+            if abs(btc_wallet_variation) > 1:
+                print(f"btc_wallet_variation > 1: {btc_wallet_variation}")
+            new_long_wallet, money_variation, trading_fee = self._handle_long_position(btc_wallet_variation=btc_wallet_variation, 
+                        btc_price=btc_price, new_position=new_position)
             # in case we had to sell shorts before buying longs, ad trading_fee from before
             trading_fee += trading_fee_sell
-            return new_long_wallet, self.short_wallet, money_variaton, trading_fee
+            return new_long_wallet, self.short_wallet, money_variation, trading_fee
 
         elif new_position < 0: # Adopting a SHORT Position
             ### we negate the position for shorts, so that positive value means we buy shorts and negative means we sell shorts
@@ -469,16 +470,16 @@ class BTCMarket_Env():
             # compute btc_wallet_variation, if we are already short and want to buy more short or sell some shorts 
             if self.short_position > 0:
                 if (new_position - (self.short_wallet[0]*btc_price) / self.wallet_value) < 1e-1:
-                    btc_wallet_variaton = 0 # in case the change in investment is smaller than 0.1% of wallet_value, we hold
+                    btc_wallet_variation = 0 # in case the change in investment is smaller than 0.1% of wallet_value, we hold
                 else:
-                    btc_wallet_variaton = new_position - round((self.short_wallet[0]*btc_price) / self.wallet_value, 3)
-            if abs(btc_wallet_variaton) > 1:
-                print(f"btc_wallet_variaton > 1: {btc_wallet_variaton}")
-            new_short_wallet, money_variaton, trading_fee = self._handle_short_position(btc_wallet_variaton=btc_wallet_variaton, 
-                        btc_price=btc_price)
+                    btc_wallet_variation = new_position - round((self.short_wallet[0]*btc_price) / self.wallet_value, 3)
+            if abs(btc_wallet_variation) > 1:
+                print(f"btc_wallet_variation > 1: {btc_wallet_variation}")
+            new_short_wallet, money_variation, trading_fee = self._handle_short_position(btc_wallet_variation=btc_wallet_variation, 
+                        btc_price=btc_price, new_position=new_position)
             # in case we had to sell longs before buying shorts, ad trading_fee from before
             trading_fee += trading_fee_sell
-            return self.long_wallet, new_short_wallet, money_variaton, trading_fee
+            return self.long_wallet, new_short_wallet, money_variation, trading_fee
 
     def _get_new_state(self):
         starting_id = self.ep_timestep - self.window_size
