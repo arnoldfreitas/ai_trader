@@ -53,7 +53,9 @@ class TestEnv(unittest.TestCase):
                 fee_paid =btc_env._handle_long_position(
                     btc_wallet_variation=btc_wallet_variation,
                     btc_price = fixed_priced_for_test,
-                    new_position = action )
+                    new_position = action,
+                    tmp_wallet_value = btc_env.wallet_value,
+                    tmp_long_position = btc_env.long_position)
             long_variation_eur = - money_variation - fee_paid
             # Update Vars as in step
             btc_env.money_available += money_variation
@@ -129,7 +131,9 @@ class TestEnv(unittest.TestCase):
                 fee_paid =btc_env._handle_long_position(
                     btc_wallet_variation=btc_wallet_variation,
                     btc_price = fixed_priced_for_test,
-                    new_position = action)
+                    new_position = action,
+                    tmp_wallet_value = btc_env.wallet_value,
+                    tmp_long_position = btc_env.long_position)
             long_variation_eur = - money_variation - fee_paid
             # Update Vars as in step
             btc_env.money_available += money_variation
@@ -214,7 +218,9 @@ class TestEnv(unittest.TestCase):
                 fee_paid =btc_env._handle_long_position(
                     btc_wallet_variation=btc_wallet_variation,
                     btc_price = fixed_priced_for_test ,
-                    new_position = action)
+                    new_position = action,
+                    tmp_wallet_value = btc_env.wallet_value,
+                    tmp_long_position = btc_env.long_position)
             long_variation_eur = - money_variation - fee_paid
             # Update Vars as in step
             btc_env.money_available += money_variation
@@ -481,8 +487,9 @@ class TestEnv(unittest.TestCase):
 
         pos_long_expected = np.array(actions_for_test)
 
-        wallet_expected = np.append([100, 100],[[units, 100] for units in [ 100.00, 100.00, 89.99, 79.98,
-                                69.98, 59.98, 49.97, 39.98, 29.98, 19.98, 9.99, 0.00, 0.00]]).flatten()
+        wallet_expected = np.append([[units, 100] for units in [100.00, 
+                        100.00, 89.99, 79.98, 69.98, 59.98, 49.97, 39.98, 29.98, 
+                        19.98, 9.99]], [[0.00, 0.00], [0.00, 0.00]]).flatten()
 
         self.assertTrue(np.allclose(pos_long_expected, long_pos_env, atol = 1e-2),
                         f'\nExpected:\n {pos_long_expected} \nComputed:\n {long_pos_env} \
@@ -602,6 +609,6 @@ class TestEnv(unittest.TestCase):
 
 
 if __name__ == '__main__':
-#     unittest.main()
-    tmp = TestEnv()
-    tmp.test_handle_long_position_variations_and_hold_position()
+    unittest.main()
+    # tmp = TestEnv()
+    # tmp.test_handle_long_position_variations_and_hold_position()
