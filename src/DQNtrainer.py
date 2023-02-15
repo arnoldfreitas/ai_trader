@@ -24,8 +24,9 @@ class DQNTrainer():
     '''
     def __init__(self, env, agent,
                 observation_space: tuple, 
-                action_space: tuple,
+                action_space: int,
                 batch_size: int,
+                epoch : int = 5, 
                 gamma: float = 0.95,
                 algorithm: str = 'DQN',
                 data_path: str ='./../data',) -> None:
@@ -37,10 +38,8 @@ class DQNTrainer():
         self.env = env 
         self.agent = agent
         self.data_path = data_path
-        
-        self.gamma = gamma # Decay Constant for DQN
-        self.batch_size = batch_size
         self.memory = deque() # Save Experience for policy update
+
         # States / Observation
         self.observation_space = observation_space
         self.state_size = observation_space[0]
@@ -48,6 +47,13 @@ class DQNTrainer():
         
         # Action
         self.action_space = action_space
+
+        # Train params
+        self.batch_size = batch_size
+        self.x_train_shape = (self.batch_size, self.state_size*self.window_size)
+        self.y_train_shape = (self.batch_size, action_space)
+        self.epoch = epoch
+        self.gamma = gamma # Decay Constant for DQN
 
         # Logging params
         time_str=datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -205,39 +211,48 @@ class DQNTrainer():
             Tensorflow Training History
         """
         batch = []
-        # for i in range(1):
-        for i in range(len(self.memory) - self.batch_size + 1, len(self.memory)):
+        for i in range(max([len(self.memory) - self.batch_size, 0]), len(self.memory)):
             batch.append(self.memory[i])
+        self.memory.clear()
+        # init batch train vars for data
+        x_train = np.zeros(self.x_train_shape)
+        y_train = np.zeros(self.y_train_shape)
 
-        # Change here to fit new RL-Algo
-        id = 0
-        for state, action, reward, next_state, done in batch:
-            reward = reward
-            state = tf.reshape(tf.convert_to_tensor(state,dtype=np.float32),
-                                shape=(1,self.state_size*self.window_size))
-            next_state = tf.reshape(tf.convert_to_tensor(next_state,dtype=np.float32),
-                                shape=(1,self.state_size*self.window_size))
-            # print(action.shape)
-            # print(state.shape)
-            # Comput Reward Decay for DQN
+        # init state, action, reward for training
+        state, _, reward, next_state , done = batch[0]
+        action = self.agent.model.predict(state,verbose = 0)
+        for index in range(1,len(batch)):
+            # Unused code for keeping track of the past
+            # state = tf.reshape(tf.convert_to_tensor(state,dtype=np.float32),
+            #                     shape=(1,self.state_size*self.window_size))
+            # next_state = tf.reshape(tf.convert_to_tensor(next_state,dtype=np.float32),
+            #                     shape=(1,self.state_size*self.window_size))
+            # check for nan values, or may occur errors during training
+            if np.any(np.isnan(state)) or \
+                np.any(np.isnan(reward)) or np.any(np.isnan(action)):
+                raise ValueError("nan value found")
+
+            # Compute Reward Decay for DQN
+            action_next = self.agent.model.predict(next_state,verbose = 0)
             if not done:
-                reward += self.gamma * np.amax(
-                    self.agent.model.predict(
-                        next_state,
-                        verbose = 0)[0])
-                # reward += self.gamma * np.amax(batch[id+1,1][0]) 
+                reward += self.gamma * np.max(action_next)
 
-            target = self.agent.model.predict(
-                        state,
-                        verbose = 0)
-            id_act = np.argmax(action)
-            target[0][id_act] = reward
+            # Compute new target
+            target = action
+            id_act = np.argmax(target)
+            target[0,id_act] = reward
 
-            result=self.agent.model.fit(state, target, epochs=5, verbose=0)
-            id +=1
+            # Update training data
+            x_train[index]= state[0]
+            y_train[index]= target[0]
+            # update state, action, reward for training
+            state, _, reward, next_state , done = batch[index]
+            action = action_next
 
-        self.agent.update_epsilon()
-        
+        # Batch Train
+        result=self.agent.model.fit(x_train, y_train, 
+                epochs=self.epoch, verbose=1)
+        agent.update_epsilon()
         return result
 
     def save_data(self,episode,train_data,save_model=True):
@@ -256,7 +271,7 @@ class DQNTrainer():
         with open(self.train_folder+"/train_data.json","w") as out_file:
             json.dump(train_data,out_file)
         if save_model:
-            self.model.save(self.train_folder+"models_ai_trade_{}_{}.h5".format(time_str,episode))
+            self.agent.model.save(self.train_folder+"models_ai_trade_{}_{}.h5".format(time_str,episode))
         
         # Save info from checkpoint to train_log_dataframe
         tmp = pd.DataFrame.from_dict(self.train_log_dict)
@@ -271,7 +286,7 @@ if __name__ == "__main__":
     obs_space = (5,20)
     act_space = 4
 
-    money = 200
+    money = 10000
     fee = 0.001
     episodes = 1
     runs_p_eps = 1
@@ -286,7 +301,7 @@ if __name__ == "__main__":
     dqntrainer = DQNTrainer(env, agent,
                 observation_space = obs_space,
                 action_space = act_space,
-                batch_size=32)
+                batch_size=100)
 
     dqntrainer.rollout(n_episodes=episodes, run_per_episode=runs_p_eps)
 

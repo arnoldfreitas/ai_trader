@@ -158,23 +158,24 @@ class BTCMarket_Env():
 
         # At the end of step: necessary updates to internal params
         self.money_available += money_variation
+        self.money_available = np.round(self.money_available,2)
         self.long_wallet = new_long_wallet
         self.short_wallet = new_short_wallet
         # True wallet_value, either long or short will be 0
         self.wallet_value = np.round(self.money_available + new_long_wallet[0] * actual_price + new_short_wallet[0] * actual_price, 2)
-        # The commented function calculates what we payed to get the assets. This is not what the assets are currently worth
-        #test_action = new_long_wallet[0] * new_long_wallet[1] / self.wallet_value \
-        #    + new_short_wallet[0] * new_short_wallet[1] / self.wallet_value # long or short will be zero
+        # Both positions have to be upgraded in case we sold and bought in one step
+        long_val = np.round(new_long_wallet[0] * actual_price , 2)
+        short_val = np.round(new_short_wallet[0] * actual_price , 2)
+        self.long_position = np.round(long_val / self.wallet_value, 2)
+        self.short_position = np.round(short_val / self.wallet_value, 2)
         test_action = np.round(new_long_wallet[0] * actual_price / self.wallet_value \
             + new_short_wallet[0] * actual_price / self.wallet_value, 2) # long or short will be zero
         if not( abs(test_action - action[0]) < 1e-2 ):
                 print(f"Value not Expected after action:\n \
-                action: {action[0]} ; {test_action}; {self.long_position + self.short_position}")
-        
-        # Both positions have to be upgraded in case we sold and bought in one step
-        self.long_position = np.round(new_long_wallet[0] * actual_price / self.wallet_value, 2)
-        self.short_position = np.round(new_short_wallet[0] * actual_price / self.wallet_value, 2)
-
+        action: {action}; test_action: {test_action};\n \
+        long pos/ val {self.long_position} , {long_val};\n \
+        short pos/ val {self.short_position} , {short_val};\n \
+        money_available: {self.money_available}; wallet_value: {self.wallet_value}")
         self.windowed_money.pop(0)
         # windowed_money.append(self.money_available)
         self.windowed_money.append(self.wallet_value)
@@ -434,7 +435,7 @@ class BTCMarket_Env():
 
         # sell all positions if from short to long, from long to short or new_position = 0
         if  abs(new_position) <= 1e-3:
-            if self.short_position > 0:
+            if self.short_position > 1e-3:
                 # sell all shorts first. later in this function by longs with the amount of new_position
                 btc_wallet_variation = - self.short_position
                 new_short_wallet, money_variation, trading_fee = self._handle_short_position(
@@ -448,7 +449,7 @@ class BTCMarket_Env():
                 new_short_wallet_out = new_short_wallet
                 money_variation_out += money_variation
 
-            if self.long_position > 0:
+            if self.long_position > 1e-3:
                 # sell all and keep going with rest of the function
                 btc_wallet_variation = - self.long_position
                 new_long_wallet, money_variation, trading_fee = self._handle_long_position(
@@ -477,7 +478,7 @@ class BTCMarket_Env():
                 return self.long_wallet, self.short_wallet, 0, 0
             
             # in case we had to sell shorts before buying longs, ad trading_fee from before
-            if self.short_position > 0:
+            if abs(self.short_position) > 1e-3:
                 # sell all shorts first. later in this function by longs with the amount of new_position
                 btc_wallet_variation = - self.short_position
                 new_short_wallet, money_variation, trading_fee = self._handle_short_position(
@@ -508,7 +509,9 @@ class BTCMarket_Env():
             trading_fee_out += trading_fee
             new_long_wallet_out = new_long_wallet
             money_variation_out += money_variation
-
+            if np.round(self.money_available + money_variation_out, 2) < 0:
+                print(f"Transaction denied due to lack of available money: {self.money_available} < {np.round(abs(money_variation_out), 2)}")
+                return self.long_wallet, self.short_wallet, 0, 0
             return new_long_wallet, new_short_wallet_out, money_variation, trading_fee
 
         if new_position < 1e-3: # Adopting a SHORT Position
@@ -517,7 +520,7 @@ class BTCMarket_Env():
                 # in case the change in investment is smaller than 0.1% of wallet_value, we hold
                 return self.long_wallet, self.short_wallet, 0, 0
             
-            if self.long_position > 0:
+            if abs(self.long_position) > 1e-3:
                 # sell all and keep going with rest of the function
                 btc_wallet_variation = - self.long_position
                 new_long_wallet, money_variation, trading_fee = self._handle_long_position(
@@ -550,6 +553,10 @@ class BTCMarket_Env():
             trading_fee_out += trading_fee
             new_short_wallet_out = new_short_wallet
             money_variation_out += money_variation
+
+            if np.round(self.money_available + money_variation_out, 2) < 0:
+                print(f"Transaction denied due to lack of available money: {self.money_available} < {np.round(abs(money_variation_out), 2)}")
+                return self.long_wallet, self.short_wallet, 0, 0
 
             return new_long_wallet, new_short_wallet_out, money_variation, trading_fee
 
@@ -617,7 +624,7 @@ class BTCMarket_Env():
         return reward
    
     def compute_reward_from_tutor(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float,) -> float:
+                actual_price: float) -> float:
         """
         Function to compute reward based on state and action.
 
@@ -637,16 +644,12 @@ class BTCMarket_Env():
             Reward Value
         """
 
-
-        pos_yield = actual_price / self.long_wallet[1]
-        act_val = pos_yield * self.long_position
-        
-        fee=act_val*self.trading_fee
-        act_val-=fee
-        act_val+=self.money_available
-        reward=act_val-self.start_money
-        
-        return reward
+        pos_yield = 0.0
+        if self.long_wallet[1] > 0.0:
+            pos_yield = actual_price / self.long_wallet[1]
+        else:
+            pos_yield = 1 - self.wallet_value / self.start_money
+        return pos_yield
 
     def compute_reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float,) -> float:
