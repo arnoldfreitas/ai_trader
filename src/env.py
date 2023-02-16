@@ -41,6 +41,8 @@ class BTCMarket_Env():
         self.money_available = None 
         self.wallet_value = None # money_available + BTC_price * units_in_inventory
         self.money_fiktiv = None
+        self.expected_return = None
+        self.variance_returns_squared = None
 
         # States / Observation
         self.observation_space = observation_space 
@@ -98,6 +100,9 @@ class BTCMarket_Env():
         # position on btc in percentage of wallet value
         self.long_position: float = 0 # [%]: (self.long_wallet*BTC.price) / self.wallet_value[-1]
         self.short_position: float = 0 # [%]: (self.short_wallet*BTC.price) / self.wallet_value[-1]
+        # Return history paramerter for reward computation
+        self.expected_return = 0
+        self.variance_returns_squared = 0
 
         # the following are just for now until we decide 
         self.buy_long_count: float = 0
@@ -433,6 +438,7 @@ class BTCMarket_Env():
         new_long_wallet_out = [0,0] 
         money_variation_out = 0
 
+        ### How does this work?? if new_position = 0.5 and old position was -0.5 it wont work i guess
         # sell all positions if from short to long, from long to short or new_position = 0
         if  abs(new_position) <= 1e-3:
             if self.short_position > 1e-3:
@@ -479,7 +485,7 @@ class BTCMarket_Env():
             
             # in case we had to sell shorts before buying longs, ad trading_fee from before
             if abs(self.short_position) > 1e-3:
-                # sell all shorts first. later in this function by longs with the amount of new_position
+                # sell all shorts first. later in this function buy longs with the amount of new_position
                 btc_wallet_variation = - self.short_position
                 new_short_wallet, money_variation, trading_fee = self._handle_short_position(
                         btc_wallet_variation=btc_wallet_variation, 
@@ -696,6 +702,57 @@ class BTCMarket_Env():
         reward = cummulative_return / (max_drawadown - 0.1)
 
         return reward
+
+    def reward_drrl_paper(self, state: np.ndarray, action: np.ndarray,
+                actual_price: float,) -> float:
+        """
+        Function to compute reward based on state and action.
+
+        Notes
+        -----
+        build state as in rl_agent.AI_Trader.get_reward_money
+
+        Parameters
+        ----------
+        state: np.ndarray, 
+        action: np.ndarray,
+        actual_price: float
+            Acutal BTC Price
+        Returns
+        -------
+        reward
+            Reward Value
+        """
+        # Look at Paper DRRL-Agent and Link in Word in googledrive for calculation dateils
+        # TODO: tau_decay, exponential decay parameter
+        tau_decay = 0.004
+        # execution cost should be the difefrence between bid and ask + trading_fee
+        execution_cost = action * self.wallet_value * self.trading_fee # + spread (bid-ask)
+        actions = self.log_dict['action']
+        if actions:
+            old_action = actions[-1]
+        else:
+            old_action = 0
+        old_price = actual_price
+        new_price = state[-5]
+        # absolute price change
+        price_change = new_price - old_price
+
+        # net return in an abstract manner, these are not exactly the immediate_profits, but represent positive and negative rewards
+        # makes sense because the trader has to learn to trade with percentages of his wallet. He should get more profit just from having 
+        # a higher amout of star_money     
+        reward = price_change * action - execution_cost * abs(action - old_action) # - funding_cost * action
+        self.variance_returns_squared = tau_decay * self.variance_returns_squared + (1 - tau_decay) * (reward - self.expected_return)**2
+        self.expected_return = tau_decay * self.expected_return + (1 - tau_decay) * reward
+
+        # risk appetite parameter
+        # Explanation: Mit unserem wallet_value könnten wir nicht zwingend soviel geld gemacht haben wie price_change angbt. 
+        # Bei betrachtung unserer reward function, macht diese implementation aber sinn. 
+        baseline_profit = abs(price_change)
+        gamma = 252**0.5 * (self.expected_return - baseline_profit) / self.variance_returns_squared
+        utility = self.expected_return - gamma / 2 * self.variance_returns_squared
+
+        return utility
 
     def sigmoid(self,x):
         try:
