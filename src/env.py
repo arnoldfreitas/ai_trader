@@ -703,10 +703,10 @@ class BTCMarket_Env():
 
         return reward
 
-    def reward_drrl_paper(self, state: np.ndarray, action: np.ndarray,
+    def reward_DSR(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float,) -> float:
         """
-        Function to compute reward based on state and action.
+        Function to compute Differential Sharpe Ratio.
 
         Notes
         -----
@@ -724,16 +724,14 @@ class BTCMarket_Env():
             Reward Value
         """
         # Look at Paper DRRL-Agent and Link in Word in googledrive for calculation dateils
-        # TODO: tau_decay, exponential decay parameter
+        # TODO: tau_decay, exponential decay parameter. IMPLEMENT IN TRAINER CLASS I GUESS.
         tau_decay = 0.004
         # execution cost should be the difefrence between bid and ask + trading_fee
         execution_cost = action * self.wallet_value * self.trading_fee # + spread (bid-ask)
         actions = self.log_dict['action']
-        if actions:
-            old_action = actions[-1]
-        else:
-            old_action = 0
+        old_action = actions[-1]
         old_price = actual_price
+        #TODO: new_price bzw. price_change. state[-5] is actually the price change wrapped by a sigmoid function.
         new_price = state[-5]
         # absolute price change
         price_change = new_price - old_price
@@ -744,11 +742,12 @@ class BTCMarket_Env():
         reward = price_change * action - execution_cost * abs(action - old_action) # - funding_cost * action
         self.variance_returns_squared = tau_decay * self.variance_returns_squared + (1 - tau_decay) * (reward - self.expected_return)**2
         self.expected_return = tau_decay * self.expected_return + (1 - tau_decay) * reward
-
+        
+        ###### THIS IS THE TARGET, maximum profit achievable. Our model tries to optimize to make these profits
+        baseline_profit = abs(price_change) # - fee 
         # risk appetite parameter
         # Explanation: Mit unserem wallet_value könnten wir nicht zwingend soviel geld gemacht haben wie price_change angbt. 
         # Bei betrachtung unserer reward function, macht diese implementation aber sinn. 
-        baseline_profit = abs(price_change)
         gamma = 252**0.5 * (self.expected_return - baseline_profit) / self.variance_returns_squared
         utility = self.expected_return - gamma / 2 * self.variance_returns_squared
 

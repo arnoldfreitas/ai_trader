@@ -117,7 +117,7 @@ class DQNTrainer():
                     tmp_wallet_value = env.wallet_value
                     action = self.agent.compute_action(state)
                     # Transform Action from Policy to Env Requirement 
-                    dqn_action = self.transforme_to_dqn_action(action)
+                    dqn_action = self.transform_to_dqn_action(action)
                     # Compute new step
                     next_state, reward, done = self.env.step(action=dqn_action)
                     # save Experience to Memory
@@ -177,7 +177,7 @@ class DQNTrainer():
         self.train_log_dict['done'].append(done)
         self.train_log_dict['epsilon'].append(epsilon)
 
-    def transforme_to_dqn_action(self, actions):
+    def transform_to_dqn_action(self, actions):
         """
         """
         act_eval = np.argmax(actions)

@@ -45,7 +45,7 @@ class DRLTrainer():
         self.state_size = observation_space[0]
         self.window_size = observation_space[1]
         
-        # Action
+        # Action - int?
         self.action_space = action_space
 
         # Train params
@@ -106,7 +106,7 @@ class DRLTrainer():
                 print("Episode: {}/{} || Run {}/{}".format(episode, 
                             n_episodes,run,run_per_episode))
                 if run % 5 == 0: # Increase epsilon every 5 runs
-                    self.agent.update_epsilon(increase_epsilon=0.5 -(run/run_per_episode)*0)
+                    self.agent.update_epsilon(increase_epsilon=0.5 -(run/run_per_episode)*0) # *0 why?
                     print(f'on Run {run} set Eplison to {self.agent.epsilon} to find global minimum')
                 train_data={}
                 run_profit = 0
@@ -117,10 +117,10 @@ class DRLTrainer():
                     # Compute Action
                     tmp_wallet_value = env.wallet_value
                     action = self.agent.compute_action(state)
-                    # Transform Action from Policy to Env Requirement 
-                    dqn_action = self.transforme_to_dqn_action(action)
+                    # round action to one decimal point (that we dont take to small actions)
+                    rounded_action = round(action, 1)
                     # Compute new step
-                    next_state, reward, done = self.env.step(action=dqn_action)
+                    next_state, reward, done = self.env.step(action=rounded_action)
                     # save Experience to Memory
                     self.memory.append((state, action, reward, next_state, done))
                     state = next_state
@@ -178,7 +178,7 @@ class DRLTrainer():
         self.train_log_dict['done'].append(done)
         self.train_log_dict['epsilon'].append(epsilon)
 
-    def transforme_to_dqn_action(self, actions):
+    def transform_to_dqn_action(self, actions):
         """
         """
         act_eval = np.argmax(actions)
@@ -228,10 +228,28 @@ class DRLTrainer():
                 np.any(np.isnan(reward)) or np.any(np.isnan(action)):
                 raise ValueError("nan value found")
 
+            '''
+            Rough structure of model.fit():
+            1. compute DSR value (whoch is the negative loss so we maximize the DSR)
+                See DSR function: it actually computes the DSR with predictions(actual profit made) and targets(profit we could have made))
+
+            2. compute gradients 
+            3. update gradients
+
+            '''
+            with tf.GradientTape() as tape:
+                # get DSR (differential sharpe ratio). Why do we compute it twice? in env-class and here. makes no sense with my implementation
+                loss = - self.env.reward_DSR(state, action, )
+            
+            # compute gradients of the DSR to the model parameters
+            grads = tape.gradient(loss, self.agent.model.trainable_variables)
+            # update model parameters
+            self.model.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+
             # Compute Reward Decay for DQN
             action_next = self.agent.model.predict(next_state,verbose = 0)
             if not done:
-                reward += self.gamma * np.max(action_next)
+                reward += self.gamma * np.max(action_next) ### action_next (is probability i guess), Hängt dieser reward mit rewrd_fuc zusammen?
 
             # Compute new target
             target = action
