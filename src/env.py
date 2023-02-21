@@ -159,7 +159,7 @@ class BTCMarket_Env():
         state = self._get_new_state()
         
         # Compute Reward
-        reward = self.compute_reward_from_tutor(state, action, actual_price)
+        reward = self.compute_reward_from_tutor(state, action, actual_price, trading_fee) # action at time t, price at time t+1
 
         # At the end of step: necessary updates to internal params
         self.money_available += money_variation
@@ -704,7 +704,7 @@ class BTCMarket_Env():
         return reward
 
     def reward_DSR(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float,) -> float:
+                actual_price: float, trading_fee: float) -> float:
         """
         Function to compute Differential Sharpe Ratio.
 
@@ -724,31 +724,30 @@ class BTCMarket_Env():
             Reward Value
         """
         # Look at Paper DRRL-Agent and Link in Word in googledrive for calculation dateils
-        # TODO: tau_decay, exponential decay parameter. IMPLEMENT IN TRAINER CLASS I GUESS.
-        tau_decay = 0.004
+        # tau_decay parameter 
+        tau_decay = 0.9999
+        # get historical data for calculations
+        btc_close_price_history = self.log_dict['btc_close_price']
+        action_history = self.log_dict['action']
+
         # execution cost should be the difefrence between bid and ask + trading_fee
-        execution_cost = action * self.wallet_value * self.trading_fee # + spread (bid-ask)
-        actions = self.log_dict['action']
-        old_action = actions[-1]
-        old_price = actual_price
-        #TODO: new_price bzw. price_change. state[-5] is actually the price change wrapped by a sigmoid function.
-        new_price = state[-5]
-        # absolute price change
-        price_change = new_price - old_price
+        execution_cost = trading_fee # + spread (bid-ask)
+        old_action = action_history[-1]
+        old_price_t = btc_close_price_history[-1]
+        old_price_t1 = btc_close_price_history[-2]
+        # absolute price change t-1 to t
+        price_change = old_price_t - old_price_t1
 
         # net return in an abstract manner, these are not exactly the immediate_profits, but represent positive and negative rewards
         # makes sense because the trader has to learn to trade with percentages of his wallet. He should get more profit just from having 
-        # a higher amout of star_money     
-        reward = price_change * action - execution_cost * abs(action - old_action) # - funding_cost * action
-        self.variance_returns_squared = tau_decay * self.variance_returns_squared + (1 - tau_decay) * (reward - self.expected_return)**2
-        self.expected_return = tau_decay * self.expected_return + (1 - tau_decay) * reward
-        
-        ###### THIS IS THE TARGET, maximum profit achievable. Our model tries to optimize to make these profits
-        baseline_profit = abs(price_change) # - fee 
-        # risk appetite parameter
-        # Explanation: Mit unserem wallet_value könnten wir nicht zwingend soviel geld gemacht haben wie price_change angbt. 
-        # Bei betrachtung unserer reward function, macht diese implementation aber sinn. 
-        gamma = 252**0.5 * (self.expected_return - baseline_profit) / self.variance_returns_squared
+        # a higher amout of start_money     
+        net_return = price_change * old_action - execution_cost # - funding_cost * action
+        self.variance_returns_squared = tau_decay * self.variance_returns_squared + (1 - tau_decay) * (net_return - self.expected_return)**2
+        self.expected_return = tau_decay * self.expected_return + (1 - tau_decay) * net_return
+
+        # Gamma is set to this value in the paper (rrl agent)
+        gamma = 0.00001
+        #gamma = 252**0.5 * (self.expected_return - baseline_profit) / self.variance_returns_squared
         utility = self.expected_return - gamma / 2 * self.variance_returns_squared
 
         return utility

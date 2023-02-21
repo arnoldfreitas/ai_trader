@@ -118,7 +118,7 @@ class DRLTrainer():
                     tmp_wallet_value = env.wallet_value
                     action = self.agent.compute_action(state)
                     # round action to one decimal point (that we dont take to small actions)
-                    rounded_action = round(action, 1)
+                    rounded_action = round(action, 1) ####### we also round the action in the env.step() function TODO: remove one
                     # Compute new step
                     next_state, reward, done = self.env.step(action=rounded_action)
                     # save Experience to Memory
@@ -216,56 +216,28 @@ class DRLTrainer():
             batch.append(self.memory[i])
         self.memory.clear()
         # init batch train vars for data
-        x_train = np.zeros(self.x_train_shape)
-        y_train = np.zeros(self.y_train_shape)
+        y_pred = 0
+        y_target = 0
 
-        # init state, action, reward for training
-        state, _, reward, next_state , done = batch[0]
-        action = self.agent.model.predict(state,verbose = 0)
+        # For DRL, we just take all saved values from the env for training
+        # Compute Gradients of the Reward to all weights and update
         for index in range(1,len(batch)):
-            # check for nan values, or may occur errors during training
-            if np.any(np.isnan(state)) or \
-                np.any(np.isnan(reward)) or np.any(np.isnan(action)):
-                raise ValueError("nan value found")
-
-            '''
-            Rough structure of model.fit():
-            1. compute DSR value (whoch is the negative loss so we maximize the DSR)
-                See DSR function: it actually computes the DSR with predictions(actual profit made) and targets(profit we could have made))
-
-            2. compute gradients 
-            3. update gradients
-
-            '''
-            with tf.GradientTape() as tape:
-                # get DSR (differential sharpe ratio). Why do we compute it twice? in env-class and here. makes no sense with my implementation
-                loss = - self.env.reward_DSR(state, action, )
             
-            # compute gradients of the DSR to the model parameters
-            grads = tape.gradient(loss, self.agent.model.trainable_variables)
-            # update model parameters
-            self.model.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+            _, action, reward, _, _= batch[index]
+            # check for nan values, or may occur errors during training
+            #if np.any(np.isnan(state)) or \
+            #    np.any(np.isnan(reward)) or np.any(np.isnan(action)):
+            #    raise ValueError("nan value found")
 
-            # Compute Reward Decay for DQN
-            action_next = self.agent.model.predict(next_state,verbose = 0)
-            if not done:
-                reward += self.gamma * np.max(action_next) ### action_next (is probability i guess), Hängt dieser reward mit rewrd_fuc zusammen?
+            # we dont need the action for training we just declare it here to give some y_pred to keras because it needs it.
+            # Our custom loss function just need y_target namely the reward
+            y_pred = action
+            y_target = reward
 
-            # Compute new target
-            target = action
-            id_act = np.argmax(target)
-            target[0,id_act] = reward
+            # Batch Train (in this case on-line traing without batches)
+            result=self.agent.model.fit(y_target, y_pred,
+                    epochs=self.epoch, verbose=1)
 
-            # Update training data
-            x_train[index]= state[0]
-            y_train[index]= target[0]
-            # update state, action, reward for training
-            state, _, reward, next_state , done = batch[index]
-            action = action_next
-
-        # Batch Train
-        result=self.agent.model.fit(x_train, y_train, 
-                epochs=self.epoch, verbose=1)
         agent.update_epsilon()
         return result
 

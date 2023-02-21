@@ -15,14 +15,12 @@ class LossFunctions:
         '''
         Function to compute loss for gradient ascent.
 
-        action is of shape (4)
-        y_true = np.array([reward] * 4)
+        !!!!! This is just for Direct Recurrent Reinforcement Learing now !!!!!
 
-        y_true: we can compute, therefore we set as reward. Shape must be equal action shape.
-        y_pred: actions from policy NN given through fit.
+        Loss should be the negative of the reward in order to maximize it.
         '''
         # Loss function has to be negative in order to perform gradient ascent
-        loss = - y_true[0]
+        loss = - y_true
 
         return loss
 
