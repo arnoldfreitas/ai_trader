@@ -148,14 +148,14 @@ class DQNTrainer():
                     if t >=100 and t % 100 == 0:
                         self.save_data(episode,train_data,save_model=False)
                         # Log Checkpoint Info to Screen
-                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit:.2f}')
+                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
                 
                 # Log Run Info to Screen
-                print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit:.2f} || money available: {(self.env.money_available):.2f},  wallet value: {(self.env.wallet_value):.2f}')
+                print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
             
             # Log Episode Info to Screen
             total_profit+=run_profit
-            print(f'episode {episode}/{episodes}. Profit {total_profit:2f} || money available: {(self.env.money_available):.2f},  wallet value: {(self.env.wallet_value):.2f}')
+            print(f'episode {episode}/{episodes}. Profit {total_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
 
             self.save_data(episode,train_data,save_model=True)
 
@@ -189,7 +189,6 @@ class DQNTrainer():
             action = 0.0
         else:
             action = self.env.long_position
-
         return np.array([action])
 
     def batch_train(self):

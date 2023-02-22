@@ -177,7 +177,7 @@ class DRLTrainer():
             
             # Log Episode Info to Screen
             total_profit+=run_profit
-            print(f'episode {episode}/{episodes}. Profit {total_profit:2f} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
+            print(f'episode {episode}/{episodes}. Profit {total_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
 
             self.save_data(episode,train_data,save_model=True)
 

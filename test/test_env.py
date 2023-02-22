@@ -518,7 +518,7 @@ class TestEnv(unittest.TestCase):
         # Init values for testing, based on .reset
         btc_env.windowed_money = [btc_env.start_money]*(btc_env.window_size+1)
         btc_env.inventory = []
-        btc_env.money_available = btc_env.start_money # [euros]
+        btc_env.money_available = np.array(btc_env.start_money) # [euros]
         btc_env.long_wallet = [100, 100] # [units of longs, mean_price_bought]
         btc_env.short_wallet = [0, 0] # [units of shorts, mean_price_sold] 
         btc_env.wallet_value = btc_env.start_money + btc_env.long_wallet[0]*btc_env.long_wallet[1] # [euros]
@@ -606,9 +606,87 @@ class TestEnv(unittest.TestCase):
         self.assertTrue(np.allclose(wallet_expected, wallet_from_env, atol = 1e-2),
                         f'\nExpected:\n{wallet_expected} \nComputed:\n {wallet_from_env} \
                                 \nDifference:\n {wallet_expected - wallet_from_env}')
+ 
+ 
+    def test_handle_position_variation_large_position(self):
+        # Start Env for Test
+        btc_env = BTCMarket_Env(
+                observation_space = (5, 20), # (5, 15)
+                action_space = 1,
+                start_money = 10000,
+                trading_fee = 0.001)
+
+        # Init values for testing, based on .reset
+        btc_env.windowed_money = [btc_env.start_money]*(btc_env.window_size+1)
+        btc_env.inventory = []
+        btc_env.money_available = np.array(btc_env.start_money) # [euros]
+        btc_env.long_wallet = [0, 0] # [units of longs, mean_price_bought]
+        btc_env.short_wallet = [0, 0] # [units of shorts, mean_price_sold] 
+        btc_env.wallet_value = btc_env.start_money + btc_env.long_wallet[0]*btc_env.long_wallet[1] # [euros]
+        btc_env.money_fiktiv = np.array([btc_env.wallet_value]) # [euros]
+        btc_env.long_position = 0.0 # [%]
+        btc_env.short_position = 0 # [%]
+
+        btc_env.buy_long_count = 0
+        btc_env.sell_long_count = 0
+        btc_env.buy_short_count = 0
+        btc_env.sell_short_count = 0
+        
+        actions_for_test = [0.50, 1.00] 
+        fixed_priced_for_test = 100
+
+        
+        money_var_from_env = np.array([])
+        long_var_from_env = np.array([])
+        wallet_from_env = np.array([])
+        long_pos_env = np.array([])
+
+        for action in actions_for_test:
+            # Compute new Position
+            new_long_wallet, short_wallet , money_variation, \
+                fee_paid =btc_env._handle_position(
+                    new_position=action,
+                    btc_price = fixed_priced_for_test )
+        
+            long_variation_eur = - money_variation - fee_paid
+            # Update Vars as in step
+            btc_env.money_available = btc_env.money_available + money_variation
+            btc_env.long_wallet = new_long_wallet
+            btc_env.wallet_value = btc_env.money_available + new_long_wallet[0]*new_long_wallet[1]
+            btc_env.long_position = new_long_wallet[0]*new_long_wallet[1]/ btc_env.wallet_value 
+        
+            # Save Computed values for Assertation
+            money_var_from_env = np.append(money_var_from_env, money_variation)
+            long_var_from_env = np.append(long_var_from_env, long_variation_eur)
+            wallet_from_env = np.append(wallet_from_env, new_long_wallet)
+            long_pos_env = np.append(long_pos_env, btc_env.long_position)
+
+        money_var_expected = np.array([-5002.498, -4997.501])
+
+        long_var_expected = np.array([4997.501, 4992.508])
+
+        pos_long_expected = np.array(actions_for_test)
+
+        wallet_expected = np.array([[49.97, 100], [99.90, 100]]).flatten()
+
+        self.assertTrue(np.allclose(pos_long_expected, long_pos_env, atol = 1e-2),
+                        f'\nExpected:\n {pos_long_expected} \nComputed:\n {long_pos_env} \
+                                \nDifference:\n {pos_long_expected, long_pos_env}')
+
+        self.assertTrue(np.allclose(wallet_expected, wallet_from_env, atol = 1e-2),
+                        f'\nExpected:\n{wallet_expected} \nComputed:\n {wallet_from_env} \
+                                \nDifference:\n {wallet_expected - wallet_from_env}')
+        self.assertTrue(np.allclose(money_var_expected, money_var_from_env, atol = 1e-2),
+                        f'\nExpected:\n {money_var_expected} \nComputed:\n {money_var_from_env} \
+                                \nDifference:\n {money_var_expected - money_var_from_env}')
+
+        self.assertTrue(np.allclose(long_var_expected, long_var_from_env, atol = 1e-2),
+                        f'\nExpected:\n{long_var_expected} \nComputed:\n {long_var_from_env} \
+                                \nDifference:\n {long_var_expected - long_var_from_env}')
+
 
 
 if __name__ == '__main__':
-    unittest.main()
-    # tmp = TestEnv()
-    # tmp.test_handle_long_position_variations_and_hold_position()
+#     unittest.main()
+    tmp = TestEnv()
+    tmp.test_handle_position_variation_large_position()
