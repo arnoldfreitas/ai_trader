@@ -90,19 +90,19 @@ class BTCMarket_Env():
         self.windowed_money: list = [self.start_money]*(self.window_size+1)
         self.inventory: list = [] # positions: List[Tuple[Money_Invested, Average_Price, Units_Total]]
         # money in wallet for future trade
-        self.money_available: float = self.start_money # [euros]
+        self.money_available: float = np.array([self.start_money]) # [euros]
         # Absolute amount of BTCs-Long in wallet
         self.long_wallet: list = [0, 0] # [units of longs, mean_price_bought]
         # Absolute amount of BTCs-Short in wallet
         self.short_wallet: list = [0, 0] # [units of shorts, mean_price_sold] 
         # wallet_value = money_available + BTC_price * self.long_wallet[0] + BTC_Price*self.short_wallet[0]
-        self.wallet_value = self.start_money + self.long_wallet[0]*self.long_wallet[1] + self.short_wallet[0]*self.short_wallet[1] # [euros]
+        self.wallet_value = np.round([self.start_money + self.long_wallet[0]*self.long_wallet[1] + self.short_wallet[0]*self.short_wallet[1]], 2) # [euros]
         # position on btc in percentage of wallet value
-        self.long_position: float = 0 # [%]: (self.long_wallet*BTC.price) / self.wallet_value[-1]
-        self.short_position: float = 0 # [%]: (self.short_wallet*BTC.price) / self.wallet_value[-1]
+        self.long_position: float = np.array([0]) # [%]: (self.long_wallet*BTC.price) / self.wallet_value[-1]
+        self.short_position: float = np.array([0]) # [%]: (self.short_wallet*BTC.price) / self.wallet_value[-1]
         # Return history paramerter for reward computation
-        self.expected_return = 0
-        self.variance_returns_squared = 0
+        self.expected_return = np.array([0])
+        self.variance_returns_squared = np.array([0])
 
         # the following are just for now until we decide 
         self.buy_long_count: float = 0
@@ -159,10 +159,10 @@ class BTCMarket_Env():
         state = self._get_new_state()
         
         # Compute Reward
-        reward = self.compute_reward_from_tutor(state, action, actual_price, trading_fee) # action at time t, price at time t+1
+        reward = self.reward_DSR(state, action, actual_price, trading_fee) # action at time t, price at time t+1
 
         # At the end of step: necessary updates to internal params
-        self.money_available += money_variation
+        self.money_available = self.money_available + money_variation
         self.money_available = np.round(self.money_available,2)
         self.long_wallet = new_long_wallet
         self.short_wallet = new_short_wallet
@@ -175,7 +175,7 @@ class BTCMarket_Env():
         self.short_position = np.round(short_val / self.wallet_value, 2)
         test_action = np.round(new_long_wallet[0] * actual_price / self.wallet_value \
             + new_short_wallet[0] * actual_price / self.wallet_value, 2) # long or short will be zero
-        if not( abs(test_action - action[0]) < 1e-2 ):
+        if not( abs(test_action - action[0]) < 1e-1 ):
                 print(f"Value not Expected after action:\n \
         action: {action}; test_action: {test_action};\n \
         long pos/ val {self.long_position} , {long_val};\n \
@@ -191,7 +191,7 @@ class BTCMarket_Env():
             done = True
         else:
             done = False
-    
+
         # Log Episode Step to log_dict
         self.log_episode_step(action = action, state = state, 
                 reward = reward, done = done, closing_price = actual_price, 
@@ -501,7 +501,7 @@ class BTCMarket_Env():
                 tmp_wallet_value = np.round(self.money_available + money_variation_out + self.long_wallet[0]*self.long_wallet[1] + new_short_wallet_out[0]*new_short_wallet_out[1], 2)
                 tmp_long_position = np.round((self.long_wallet[0]*self.long_wallet[1])/tmp_wallet_value, 2)
             
-            btc_wallet_variation = new_position - round((self.long_wallet[0]*btc_price) / self.wallet_value, 2)
+            btc_wallet_variation = new_position - np.round((self.long_wallet[0]*btc_price) / self.wallet_value, 2)
 
             if abs(btc_wallet_variation) > 1:
                 print(f"Handle position for long. btc_wallet_variation > 1: {btc_wallet_variation}")
@@ -546,7 +546,7 @@ class BTCMarket_Env():
             ### we negate the position for shorts, so that positive value means we buy shorts and negative means we sell shorts
             new_position = abs(new_position)
     
-            btc_wallet_variation = new_position - round((self.short_wallet[0]*btc_price) / self.wallet_value, 2)
+            btc_wallet_variation = new_position - np.round((self.short_wallet[0]*btc_price) / self.wallet_value, 2)
             if abs(btc_wallet_variation) > 1:
                 print(f"btc_wallet_variation > 1: {btc_wallet_variation}")
             new_short_wallet, money_variation, trading_fee = self._handle_short_position(
@@ -630,7 +630,7 @@ class BTCMarket_Env():
         return reward
    
     def compute_reward_from_tutor(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float) -> float:
+                actual_price: float, trading_fee:float) -> float:
         """
         Function to compute reward based on state and action.
 
@@ -727,8 +727,14 @@ class BTCMarket_Env():
         # tau_decay parameter 
         tau_decay = 0.9999
         # get historical data for calculations
-        btc_close_price_history = self.log_dict['btc_close_price']
-        action_history = self.log_dict['action']
+        if len(self.log_dict['btc_price']) < 2:
+            btc_close_price_history = [actual_price, actual_price]
+        else:
+            btc_close_price_history = self.log_dict['btc_price']
+        if not self.log_dict['action']:
+            action_history = [action]
+        else:
+            action_history = self.log_dict['action']
 
         # execution cost should be the difefrence between bid and ask + trading_fee
         execution_cost = trading_fee # + spread (bid-ask)

@@ -15,6 +15,22 @@ from env import BTCMarket_Env
 from agent import Trader_Agent
 from collections import deque
 
+class DRLLossFunctions(keras.losses.Loss):
+    def __init__(self):
+        super().__init__()
+        self.name="DRL Custom Loss"
+
+    def call(self, y_true, y_pred):
+        '''
+        Function to compute loss for gradient ascent.
+
+        Loss should is defined as the negative of the reward,
+        in order to maximize the objective function, thus performing gradient ascent.
+        '''
+        # loss = -1 * tf.keras.losses.MSE(y_true, 0*y_pred)
+        tmp = tf.abs(tf.reduce_mean(y_true + (0*y_pred)))
+        loss = tf.math.scalar_mul(-1, tmp, name=None)
+        return loss
 
 class DRLTrainer():
     '''
@@ -28,6 +44,7 @@ class DRLTrainer():
                 batch_size: int,
                 epoch: int = 5,
                 gamma: float = 0.95,
+                learning_rate: float =1e-3,
                 algorithm: str = 'DRL',
                 data_path: str ='./../data',) -> None:
         """
@@ -39,7 +56,7 @@ class DRLTrainer():
         self.agent = agent
         self.data_path = data_path
 
-        self.memory = deque() # Save Experience for policy update
+        self.memory = deque(maxlen=max([batch_size+1,1])) # Save Experience for policy update
         # States / Observation
         self.observation_space = observation_space
         self.state_size = observation_space[0]
@@ -66,8 +83,10 @@ class DRLTrainer():
         # Init env controllable params
         self.env._update_log_folder(self.train_folder)
         
-        # Init agent controllable params
-        self.agent.build_model() # INIT MODEL
+        # Init agent controllable params and init model
+        custom_loss = DRLLossFunctions()
+        self.agent.build_model(learning_rate=learning_rate,
+                               loss_function=custom_loss) 
         
 
     def rollout(self, n_episodes, run_per_episode):
@@ -114,18 +133,20 @@ class DRLTrainer():
                 data_samples = self.env.episode_length
                 state, _, _ = self.env.step(np.array([0]))
                 for t in tqdm(range(data_samples)):
+                # for t in tqdm(range(100)):
                     # Compute Action
-                    tmp_wallet_value = env.wallet_value
+                    tmp_wallet_value = env.wallet_value[0]
                     action = self.agent.compute_action(state)
                     # round action to one decimal point (that we dont take to small actions)
-                    rounded_action = round(action, 1) ####### we also round the action in the env.step() function TODO: remove one
+                    rounded_action = np.round(action, 1) ####### we also round the action in the env.step() function, just leave both for extra safety.
                     # Compute new step
                     next_state, reward, done = self.env.step(action=rounded_action)
                     # save Experience to Memory
                     self.memory.append((state, action, reward, next_state, done))
                     state = next_state
-                    step_profit = env.wallet_value - tmp_wallet_value
+                    step_profit = env.wallet_value[0] - tmp_wallet_value
                     run_profit += step_profit
+
                     # save to logging
                     self.log_training(episode, run, action, state, reward, done, self.agent.epsilon)
                     # Check if is Done
@@ -149,14 +170,14 @@ class DRLTrainer():
                     if t >=100 and t % 100 == 0:
                         self.save_data(episode,train_data,save_model=False)
                         # Log Checkpoint Info to Screen
-                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit:.2f}')
+                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
                 
                 # Log Run Info to Screen
-                print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit:.2f} || money available: {(self.env.money_available):.2f},  wallet value: {(self.env.wallet_value):.2f}')
+                print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
             
             # Log Episode Info to Screen
             total_profit+=run_profit
-            print(f'episode {episode}/{episodes}. Profit {total_profit:2f} || money available: {(self.env.money_available):.2f},  wallet value: {(self.env.wallet_value):.2f}')
+            print(f'episode {episode}/{episodes}. Profit {total_profit:2f} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
 
             self.save_data(episode,train_data,save_model=True)
 
@@ -177,21 +198,6 @@ class DRLTrainer():
         self.train_log_dict['reward'].append(reward)
         self.train_log_dict['done'].append(done)
         self.train_log_dict['epsilon'].append(epsilon)
-
-    def transform_to_dqn_action(self, actions):
-        """
-        """
-        act_eval = np.argmax(actions)
-        if act_eval == 1:
-            action = 0.5
-        elif act_eval == 2:
-            action = 1.0
-        elif act_eval == 3:
-            action = 0.0
-        else:
-            action = self.env.long_position
-
-        return np.array([action])
 
     def batch_train(self):
         """
@@ -216,14 +222,13 @@ class DRLTrainer():
             batch.append(self.memory[i])
         self.memory.clear()
         # init batch train vars for data
-        y_pred = 0
-        y_target = 0
-
+        x_train = np.zeros(self.x_train_shape)
+        y_target = np.zeros(self.y_train_shape)
+            
         # For DRL, we just take all saved values from the env for training
         # Compute Gradients of the Reward to all weights and update
-        for index in range(1,len(batch)):
-            
-            _, action, reward, _, _= batch[index]
+        for index in range(0,len(batch)):
+            state, _, reward, _, _= batch[index]
             # check for nan values, or may occur errors during training
             #if np.any(np.isnan(state)) or \
             #    np.any(np.isnan(reward)) or np.any(np.isnan(action)):
@@ -231,12 +236,14 @@ class DRLTrainer():
 
             # we dont need the action for training we just declare it here to give some y_pred to keras because it needs it.
             # Our custom loss function just need y_target namely the reward
-            y_pred = action
-            y_target = reward
+            # y_pred = action
+            x_train[index] = state[0]
+            y_target[index,0] = reward
 
-            # Batch Train (in this case on-line traing without batches)
-            result=self.agent.model.fit(y_target, y_pred,
-                    epochs=self.epoch, verbose=1)
+        # Batch Train (in this case on-line traing without batches) 
+        # we can just set the batch to 1 and it will do online training
+        result=self.agent.model.fit(x_train, y_target,
+                epochs=self.epoch, verbose=1)
 
         agent.update_epsilon()
         return result
@@ -270,7 +277,7 @@ class DRLTrainer():
 
 if __name__ == "__main__":
     obs_space = (5,20)
-    act_space = 4
+    act_space = 1
 
     money = 10000
     fee = 0.001
@@ -287,7 +294,6 @@ if __name__ == "__main__":
     drltrainer = DRLTrainer(env, agent,
                 observation_space = obs_space,
                 action_space = act_space,
-                batch_size=32)
+                batch_size=1)
 
     drltrainer.rollout(n_episodes=episodes, run_per_episode=runs_p_eps)
-

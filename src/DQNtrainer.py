@@ -38,7 +38,7 @@ class DQNTrainer():
         self.env = env 
         self.agent = agent
         self.data_path = data_path
-        self.memory = deque() # Save Experience for policy update
+        self.memory = deque(maxlen=max(batch_size+1, 1)) # Save Experience for policy update
 
         # States / Observation
         self.observation_space = observation_space

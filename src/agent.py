@@ -10,20 +10,6 @@ from tensorflow import keras
 from typing import Tuple
 from env import BTCMarket_Env
 
-class LossFunctions:
-    def loss_function(y_true, y_pred):
-        '''
-        Function to compute loss for gradient ascent.
-
-        !!!!! This is just for Direct Recurrent Reinforcement Learing now !!!!!
-
-        Loss should be the negative of the reward in order to maximize it.
-        '''
-        # Loss function has to be negative in order to perform gradient ascent
-        loss = - y_true
-
-        return loss
-
 class Trader_Agent():
     '''
     Trader class.
@@ -141,6 +127,7 @@ class Trader_Agent():
         #TODO: Build RNN (LSTM) as policy network
         model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
         model.summary()
+        print(f"Model Loss: {model.compiled_loss._losses}")
         
         self.model = model
     
