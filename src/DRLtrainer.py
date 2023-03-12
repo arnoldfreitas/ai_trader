@@ -46,6 +46,7 @@ class DRLTrainer():
                 gamma: float = 0.95,
                 learning_rate: float =1e-3,
                 algorithm: str = 'DRL',
+                lstm_path: str = None,
                 data_path: str ='./../data',) -> None:
         """
         Receive arguments and initialise the  class params.
@@ -67,7 +68,7 @@ class DRLTrainer():
 
         # Train params
         self.batch_size = batch_size
-        self.x_train_shape = (self.batch_size, self.state_size*self.window_size)
+        self.x_train_shape = (self.batch_size, self.window_size, self.state_size)
         self.y_train_shape = (self.batch_size, action_space)
         self.epoch = epoch
         self.gamma = gamma # Decay Constant for DQN
@@ -85,8 +86,11 @@ class DRLTrainer():
         
         # Init agent controllable params and init model
         custom_loss = DRLLossFunctions()
-        self.agent.build_model(learning_rate=learning_rate,
-                               loss_function=custom_loss) 
+        # self.agent.build_model(learning_rate=learning_rate,
+        #                        loss_function=custom_loss) 
+        self.agent.build_model_LSTM(learning_rate=learning_rate,
+                               loss_function=custom_loss,
+                               lstm_path=lstm_path) 
         
 
     def rollout(self, n_episodes, run_per_episode):
@@ -276,7 +280,7 @@ class DRLTrainer():
         print('Data saved')
 
 if __name__ == "__main__":
-    obs_space = (5,20)
+    obs_space = (8,20)
     act_space = 1
 
     money = 10000
@@ -294,6 +298,7 @@ if __name__ == "__main__":
     drltrainer = DRLTrainer(env, agent,
                 observation_space = obs_space,
                 action_space = act_space,
-                batch_size=1)
+                batch_size=50,
+                lstm_path = "./../notebooks/best_models/11_mar_2023/lstm_2.h5")
 
     drltrainer.rollout(n_episodes=episodes, run_per_episode=runs_p_eps)

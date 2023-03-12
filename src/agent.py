@@ -117,7 +117,8 @@ class Trader_Agent():
             layer_output = 'sigmoid'
 
         model = keras.models.Sequential([
-            keras.layers.InputLayer(input_shape=(self.state_size*self.window_size,)),
+            keras.layers.InputLayer(input_shape=(self.window_size,self.state_size)),
+            keras.layers.Flatten(),
             keras.layers.Dense(units=256, activation='relu'),
             keras.layers.Dense(units=128, activation='relu'),
             keras.layers.Dense(units=64, activation='relu'),
@@ -130,6 +131,68 @@ class Trader_Agent():
         print(f"Model Loss: {model.compiled_loss._losses}")
         
         self.model = model
+    
+    def build_model_LSTM(self, learning_rate=1e-3, 
+                         loss_function='mse',
+                         lstm_path=None):
+        """
+        Build Policy model with predefined architecture.
+
+        Notes
+        -----
+        As in rl_agent.AI_Trader.model_builder
+
+        Returns
+        -------
+            Tensorflow Model 
+        """
+
+        """
+        We have an LSTM, which predict the next n time steps for BTC close value.
+
+        model_nur_lestm  =self.load_LSTM(inputs, trainable=False)
+        model_nur_lestm.add_leayer(
+            inputs.append(model_nur_lest.outputs),
+            layer1
+            layer2
+            layer3
+            output_layer
+        )
+        """
+        
+        ### Continuous action space with MLP: Define the Percentage of wallet on Bitcoins 
+        if min(self.action_domain) < 0.0:
+            # for trading perpetual swap: "tanh"; action_domain in (-1, 1)
+            layer_output = 'tanh'
+        else :
+            # for BTC: "sigmoid"; action_domain in (0, 1)
+            layer_output = 'sigmoid'
+
+        input_layer = keras.layers.Input(shape=(self.window_size,self.state_size))
+        lstm_inputs = keras.layers.Lambda(lambda x: tf.expand_dims(x[:,-1,4:], 1), 
+                                name="lstm_inputs")(input_layer)
+        lstm = keras.models.load_model(lstm_path, compile=False)
+        lstm.trainable=False
+        lstm_layer = lstm(lstm_inputs)
+        flaten_inputs = keras.layers.Flatten()(input_layer)
+        lstm_outputs = keras.layers.Flatten()(lstm_layer)
+        dense_inputs = keras.layers.concatenate([flaten_inputs,
+                            tf.reshape(lstm_outputs, 
+                            shape=(-1, 5))])
+        dense_1 = keras.layers.Dense(units=256, activation='relu')(dense_inputs)
+        dense_2 = keras.layers.Dense(units=128, activation='relu')(dense_1)
+        dense_3 = keras.layers.Dense(units=64, activation='relu')(dense_2)
+        output = keras.layers.Dense(units=self.action_space, activation=layer_output)(dense_3)
+        model = keras.Model(input_layer, output)
+        #TODO: Build RNN (LSTM) as policy network
+        model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
+        model.summary()
+        print(f"Model Loss: {model.compiled_loss._losses}")
+        
+        self.model = model
+
+        # self.lstm_model = keras.Model(input_layer, lstm_layer)
+        # self.lstm_model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
     
     def load_model(self, model_path: str):
         """
@@ -177,7 +240,8 @@ class Trader_Agent():
                 action.append(random.uniform(*self.action_domain))
             return np.array([action])
       
-        action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size*self.window_size)),verbose = 0)
+        # action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size*self.window_size)),verbose = 0)
+        action_val = self.model.predict(state,verbose = 0)[0]
 
         # round computed value to one decimal point
         # leaving decision about rounding for trainer

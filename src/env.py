@@ -4,6 +4,7 @@ import random
 import math
 import os
 from datetime import datetime
+from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
 from tensorflow import keras
 from typing import Tuple, List
@@ -34,7 +35,6 @@ class BTCMarket_Env():
         self.len_source = len(self.data_source)
         # print(f"{type(self.data_source), type(self.data_source[0])}")
         # print(f"self.len_source: {self.len_source}")
-
         # Wallet Information Params:
         self.start_money = start_money
         self.inventory = None # postions: List[Tuple[Money_Invested, Unit_Price, Units]]
@@ -48,7 +48,11 @@ class BTCMarket_Env():
         self.observation_space = observation_space 
         self.state_size = observation_space[0] # amount of parameters
         self.window_size = observation_space[1] # amount of tome-steps from states
-        
+        if self.state_size > 5: # USE LSTM
+            self.min_max_scaler = MinMaxScaler()
+            self.min_max_scaler.fit(self.data_source[['Volume', 'open','rsi14','macd']].to_numpy())
+        else:
+            self.min_max_scaler = None
         # Action
         self.action_space = action_space
 
@@ -575,11 +579,24 @@ class BTCMarket_Env():
     def _get_new_state(self):
         starting_id = self.ep_timestep - self.window_size
         if starting_id >= 0:
+            if self.state_size > 5: # USE LSTM
+                windowed_volume_data = self.ep_data['Volume'].values[starting_id:self.ep_timestep+1] 
+                windowed_macd_data = self.ep_data['macd'].values[starting_id:self.ep_timestep+1] 
+                windowed_open_data = self.ep_data['open'].values[starting_id:self.ep_timestep+1] 
+
             windowed_close_data = self.ep_data['close'].values[starting_id:self.ep_timestep+1] 
             windowed_hist_data = self.ep_data['histogram'].values[starting_id:self.ep_timestep+1]
             windowed_ema_data = self.ep_data['50ema'].values[starting_id:self.ep_timestep+1]
             windowed_rsi_data = self.ep_data['rsi14'].values[starting_id:self.ep_timestep+1]
         else:
+            if self.state_size > 5: # USE LSTM
+                windowed_volume_data = [self.ep_data['Volume'].values[0]]*abs(starting_id) \
+                        + list(self.ep_data['Volume'].values[0:self.ep_timestep+1])
+                windowed_macd_data = [self.ep_data['macd'].values[0]]*abs(starting_id) \
+                        + list(self.ep_data['macd'].values[0:self.ep_timestep+1])
+                windowed_open_data = [self.ep_data['open'].values[0]]*abs(starting_id) \
+                        + list(self.ep_data['open'].values[0:self.ep_timestep+1])
+                
             windowed_close_data = [self.ep_data['close'].values[0]]*abs(starting_id) \
                     + list(self.ep_data['close'].values[0:self.ep_timestep+1])
             windowed_hist_data = [self.ep_data['histogram'].values[0]]*abs(starting_id) \
@@ -591,13 +608,26 @@ class BTCMarket_Env():
 
         state = []
         for i in range(self.window_size):
-            state.append(self.sigmoid(windowed_close_data[i+1] - windowed_close_data[i]))
-            state.append(self.sigmoid(windowed_hist_data[i]))
-            state.append(self.sigmoid(windowed_ema_data[i+1] - windowed_ema_data[i]))
-            state.append(self.sigmoid(self.windowed_money[i+1] - self.windowed_money[i]))
-            state.append(windowed_rsi_data[i]/100)
+            norm_close = self.sigmoid(windowed_close_data[i+1] - windowed_close_data[i])
+            norm_hist = self.sigmoid(windowed_hist_data[i])
+            norm_ema = self.sigmoid(windowed_ema_data[i+1] - windowed_ema_data[i])
+            norm_money = self.sigmoid(self.windowed_money[i+1] - self.windowed_money[i])
+
+        # features = ['Volume', 'open','rsi14','macd']
+            if self.state_size > 5: # USE LSTM
+                norm_lstm = self.min_max_scaler.transform([[windowed_volume_data[i], 
+                                                             windowed_open_data[i], 
+                                                             windowed_rsi_data[i], 
+                                                             windowed_macd_data[i]]])[0]
+                # print(norm_lstm)
+                state.append([norm_close, norm_hist, 
+                              norm_ema, norm_money, norm_lstm[0], norm_lstm[1], norm_lstm[2], norm_lstm[3]])
+                # print(state)
+            else:
+                norm_rsi = windowed_rsi_data[i]/100
+                state.append([norm_close, norm_hist, norm_ema, norm_money, norm_rsi])
         #state.append(money)
-        return np.array([np.nan_to_num(state)])
+        return np.array(np.nan_to_num([state]))
 
     def compute_reward(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float,) -> float:
