@@ -290,6 +290,7 @@ if __name__ == "__main__":
 
     env = BTCMarket_Env(observation_space = obs_space,
                 action_space = act_space,
+                reward_function="reward_sortino_ratio",
                 start_money = money,
                 trading_fee= fee)
     agent = Trader_Agent(observation_space = obs_space,

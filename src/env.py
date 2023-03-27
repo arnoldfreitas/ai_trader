@@ -217,11 +217,12 @@ class BTCMarket_Env():
         return state, reward, done
 
     def init_logging_dict(self) -> dict:
-        self.log_cols=['episode', 'action', 'state', 'reward', 'done','money',
+        self.log_cols={'episode', 'action', 'state', 'reward', 'done','money',
             'btc_units','btc_eur','fee_paid', 'btc_price',  'long_wallet', 'short_wallet', 
             'wallet_value', 'long_position', 'short_position', 'buy_long_count', 
-            'sell_long_count', 'buy_short_count', 'sell_short_count']
-        return dict.fromkeys(self.log_cols, [])
+            'sell_long_count', 'buy_short_count', 'sell_short_count'}
+        tmp =  { key : [] for key in self.log_cols }
+        return tmp
 
     def log_episode_step(self, action, state, reward, done, 
                     closing_price, fee_paid, btc_units, btc_eur):
@@ -239,11 +240,11 @@ class BTCMarket_Env():
         self.log_dict['btc_eur'].append(btc_eur)
         self.log_dict['long_wallet'].append(self.long_wallet)
         self.log_dict['short_wallet'].append(self.short_wallet)
-        self.log_dict['wallet_value'].append(self.wallet_value)
-        self.log_dict['long_position'].append(self.long_position)
+        self.log_dict['wallet_value'].append(self.wallet_value[0])
+        self.log_dict['long_position'].append(self.long_position[0])
         self.log_dict['fee_paid'].append(fee_paid)
         self.log_dict['btc_price'].append(closing_price)
-        self.log_dict['short_position'].append(self.short_position)
+        self.log_dict['short_position'].append(self.short_position[0])
         self.log_dict['buy_long_count'].append(self.buy_long_count)
         self.log_dict['sell_long_count'].append(self.sell_long_count)
         self.log_dict['buy_short_count'].append(self.buy_short_count)
@@ -718,15 +719,13 @@ class BTCMarket_Env():
             wallet_history = [self.start_money, self.start_money]
         else:
             wallet_history = self.log_dict['wallet_value']
-
         #net_returns = wallet_history[-99:-1] - wallet_history[-100:]
         #wallet_history[1:] - wallet_history[0:-1]
-
         # The net_returns are all returns including timestep t
-        net_returns = wallet_history[1:] - wallet_history[:-1]
+        net_returns = [wallet_history[i] - wallet_history[i-1] for i in range(1,len(wallet_history))] 
         # calculate net_return for timestep t+1, Equation: return = return to this timestep - new trading_fee
         return_new_timestep = (self.wallet_value - wallet_history[-1]) - trading_fee
-        net_returns = np.concatenate([net_returns, [return_new_timestep]])
+        net_returns = np.append(net_returns, return_new_timestep)
         # Now compute sharpe ratio
         if net_returns.std() == 0:
             return 0
@@ -761,10 +760,10 @@ class BTCMarket_Env():
             wallet_history = self.log_dict['wallet_value']
 
         # The net_returns are all returns including timestep t
-        net_returns = wallet_history[1:] - wallet_history[:-1]
+        net_returns = [wallet_history[i] - wallet_history[i-1] for i in range(1,len(wallet_history))] 
         # calculate net_return for timestep t+1, Equation: return = return to this timestep - new trading_fee
         return_new_timestep = (self.wallet_value - wallet_history[-1]) - trading_fee
-        net_returns = np.concatenate([net_returns, [return_new_timestep]])
+        net_returns = np.append(net_returns, return_new_timestep)
         # build array with all negative profits that were made
         mask_negative_net_returns = net_returns < 0
         negative_net_returns = net_returns[mask_negative_net_returns]
