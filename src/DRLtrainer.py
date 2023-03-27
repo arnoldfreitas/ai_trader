@@ -294,7 +294,7 @@ if __name__ == "__main__":
                 trading_fee= fee)
     agent = Trader_Agent(observation_space = obs_space,
                 action_space = act_space,
-                epsilon = 0.01)
+                epsilon = 0.5)
     drltrainer = DRLTrainer(env, agent,
                 observation_space = obs_space,
                 action_space = act_space,

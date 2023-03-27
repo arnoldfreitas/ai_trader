@@ -21,6 +21,7 @@ class BTCMarket_Env():
                 start_money: float,
                 trading_fee: float = 0,
                 asset: str = 'BTC',
+                reward_function: str = 'compute_reward_from_tutor',
                 ep_period: int = 2*24*14,
                 ep_data_cols: List[str]=['close','histogram','50ema','rsi14'],
                 RL_Algo: str = 'DQN',
@@ -62,6 +63,11 @@ class BTCMarket_Env():
         self.ep_data_cols = ep_data_cols
         self.episode_length = 0
         self.ep_data = None
+        # Get reward function
+        if hasattr(self, reward_function):
+            self.reward_function = getattr(self, reward_function)
+        else:
+            self.reward_function = self.reward_sharpe_ratio
 
         # Params for logging
         time_str=datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -167,7 +173,7 @@ class BTCMarket_Env():
         state = self._get_new_state()
         
         # Compute Reward
-        reward = self.reward_DSR(state, action, actual_price, trading_fee) # action at time t, price at time t+1
+        reward = self.reward_function(state, action, actual_price, trading_fee) # action at time t, price at time t+1
 
         # At the end of step: necessary updates to internal params
         self.money_available = self.money_available + money_variation
@@ -630,7 +636,7 @@ class BTCMarket_Env():
         return np.array(np.nan_to_num([state]))
 
     def reward_freestyle(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float,) -> float:
+                actual_price: float, trading_fee:float) -> float:
         """
         Function to compute reward based on state and action.
 
@@ -772,6 +778,7 @@ class BTCMarket_Env():
     def reward_differential_sharpe_ratio(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float, trading_fee: float) -> float:
         """
+        
         Function to compute Differential Sharpe Ratio.
 
         Notes

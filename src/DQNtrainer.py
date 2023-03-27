@@ -190,6 +190,10 @@ class DQNTrainer():
             action = 1.0
         elif act_eval == 3:
             action = 0.0
+        elif act_eval == 4:
+            action = -0.5
+        elif act_eval == 5:
+            action = -1.0
         else:
             action = self.env.long_position
         return np.array([action])
