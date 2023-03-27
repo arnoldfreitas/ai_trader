@@ -169,7 +169,8 @@ class Trader_Agent():
             layer_output = 'sigmoid'
 
         input_layer = keras.layers.Input(shape=(self.window_size,self.state_size))
-        lstm_inputs = keras.layers.Lambda(lambda x: tf.expand_dims(x[:,-1,4:], 1), 
+        lstm_inputs = keras.layers.Lambda(lambda x: x[:,:,4:], 
+        # lstm_inputs = keras.layers.Lambda(lambda x: tf.expand_dims(x[:,-1,4:], 1), 
                                 name="lstm_inputs")(input_layer)
         lstm = keras.models.load_model(lstm_path, compile=False)
         lstm.trainable=False
@@ -178,7 +179,8 @@ class Trader_Agent():
         lstm_outputs = keras.layers.Flatten()(lstm_layer)
         dense_inputs = keras.layers.concatenate([flaten_inputs,
                             tf.reshape(lstm_outputs, 
-                            shape=(-1, 5))])
+                            shape=(-1, 10))])
+                            # shape=(-1, 5))])
         dense_1 = keras.layers.Dense(units=256, activation='relu')(dense_inputs)
         dense_2 = keras.layers.Dense(units=128, activation='relu')(dense_1)
         dense_3 = keras.layers.Dense(units=64, activation='relu')(dense_2)

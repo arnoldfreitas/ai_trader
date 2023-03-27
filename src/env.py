@@ -20,11 +20,12 @@ class BTCMarket_Env():
                 action_space: tuple,
                 start_money: float,
                 trading_fee: float = 0,
-                asset: str = 'BTC',
+                asset: str = 'SWAP',
                 reward_function: str = 'compute_reward_from_tutor',
                 ep_period: int = 2*24*14,
                 ep_data_cols: List[str]=['close','histogram','50ema','rsi14'],
                 RL_Algo: str = 'DQN',
+                source_file: str = 'Perp_BTC_FundingRate_Data_fakehist',
                 data_path: str ='./../data/',) -> None:
         """
         Receive arguments and initialise the  class params.
@@ -32,7 +33,7 @@ class BTCMarket_Env():
         # General Information Params
         self.ep_count = 0
         self.data_path = data_path
-        self.data_source = self.load_data(asset)
+        self.data_source = self.load_data(asset=asset, onefile=False, source_file=source_file)
         self.len_source = len(self.data_source)
         # print(f"{type(self.data_source), type(self.data_source[0])}")
         # print(f"self.len_source: {self.len_source}")
@@ -151,6 +152,9 @@ class BTCMarket_Env():
         assert (self.ep_data is not None)
 
         actual_price = self.ep_data['close'].values[self.ep_timestep]
+        actual_price_btc = self.ep_data['Close_BTC'].values[self.ep_timestep]
+        funding_rating = self.ep_data['Funding_Rate'].values[self.ep_timestep]
+        funding_rating = float(funding_rating.replace("%", ""))/100
         price_diff= actual_price - self.ep_data['close'].values[min(0,self.ep_timestep-1)]
         action = np.round(action, 2) # reduce action to 2 decimals to avoid micro transactions
         alt_long = self.long_wallet
@@ -160,19 +164,34 @@ class BTCMarket_Env():
         short_value= 0
         if self.long_position > 1e-3:
             long_value = self.long_wallet[0]*actual_price
-            short_value = self.short_wallet[0]*actual_price
+            short_value = self.short_wallet[0]*(self.short_wallet[1] - actual_price)
+            # Compute Funding payment every 8 hours
+            funding_money_var = 0
+            if ((self.ep_timestep % 16 == 0) and self.ep_timestep > 1):
+                funding_money_var = self.compute_funding(actual_price_swap = actual_price, 
+                                                        price_btc = actual_price_btc, 
+                                                        long_value = long_value, 
+                                                        short_value = short_value,
+                                                        funding_rate =funding_rating)
+
+            self.money_available = self.money_available + funding_money_var
             self.wallet_value = np.round(self.money_available + long_value + short_value, 2)
             self.long_position = long_value / self.wallet_value
         if self.short_position > 1e-3:
             long_value = self.long_wallet[0]*actual_price
-            short_value = self.short_wallet[0]*actual_price
+            short_value = self.short_wallet[0]*(self.short_wallet[1] - actual_price)
+            # Compute Funding payment every 8 hours
+            funding_money_var = 0
+            if ((self.ep_timestep % 16 == 0) and self.ep_timestep > 1):
+                funding_money_var = self.compute_funding(actual_price_swap = actual_price, 
+                                                        price_btc = actual_price_btc, 
+                                                        long_value = long_value, 
+                                                        short_value = short_value,
+                                                        funding_rate =funding_rating)
+            self.money_available = self.money_available + funding_money_var
             self.wallet_value = np.round(self.money_available + long_value + short_value, 2)
             self.short_position = short_value / self.wallet_value
 
-        # Compute Funding payment every 8 hours
-        # if self.ep_timestep % 16 == 0:
-        #     funding_money_var = self.compute_funding(actual_price, long_value, short_value)
-        
         # Compute Wallet States
         new_long_wallet, new_short_wallet, money_variation, trading_fee = self._handle_position(
                         new_position=action[0], 
@@ -193,12 +212,12 @@ class BTCMarket_Env():
         self.wallet_value = np.round(self.money_available + new_long_wallet[0] * actual_price + new_short_wallet[0] * actual_price, 2)
         # Both positions have to be upgraded in case we sold and bought in one step
         long_val = np.round(new_long_wallet[0] * actual_price , 2)
-        short_val = np.round(new_short_wallet[0] * actual_price , 2)
+        short_val = np.round(new_short_wallet[0] * (new_short_wallet[1] - actual_price) , 2)
         self.long_position = np.round(long_val / self.wallet_value, 2)
         self.short_position = np.round(short_val / self.wallet_value, 2)
         test_action = np.round(new_long_wallet[0] * actual_price / self.wallet_value \
-            + new_short_wallet[0] * actual_price / self.wallet_value, 3) # long or short will be zero
-        if not( abs(test_action - action[0]) < 1e-1 ):
+            + new_short_wallet[0] * (new_short_wallet[1] - actual_price) / self.wallet_value, 3) # long or short will be zero
+        if not( abs(test_action - abs(action[0])) < 1e-1 ):
                 print(f"Value not Expected after action:\n \
         action: {action}; test_action: {test_action};\n \
         alt_long {alt_long};\n \
@@ -221,42 +240,44 @@ class BTCMarket_Env():
         # Log Episode Step to log_dict
         self.log_episode_step(action = action, state = state, 
                 reward = reward, done = done, closing_price = actual_price, 
-                fee_paid = trading_fee, 
-                btc_units = new_long_wallet[0] + new_short_wallet[0], 
-                btc_eur= new_long_wallet[0]*new_long_wallet[1] + new_short_wallet[0]*new_short_wallet[1])
+                fee_paid = trading_fee, btc_price=actual_price_btc, funding_rate=funding_rating,
+                btc_units = new_long_wallet[0],
+                short_units =  new_short_wallet[0], 
+                btc_eur= new_long_wallet[0]*new_long_wallet[1],
+                short_eur = new_short_wallet[0]*(new_short_wallet[1]-actual_price))
 
         return state, reward, done
 
-    def compute_funding(self, actual_price_btc, long_value, short_value):
+    def compute_funding(self, actual_price_swap, price_btc, long_value, short_value, funding_rate=0.0):
         """
         Compute Money Variation due to funding
         """
-        price_swaps = self.ep_data['swap_close'].values[self.ep_timestep]
-        funding_rating = self.ep_data['funding_rate'].values[self.ep_timestep]
 
-        price_diff = price_swaps - actual_price_btc
+        price_diff = actual_price_swap - price_btc
+        money_var=0.0
         if self.long_position > 1e-3:
             if price_diff > 1e-3:
-                money_var = -funding_rating*long_value
+                money_var = -funding_rate*long_value
             if price_diff < 1e-3:
-                money_var = funding_rating*long_value
+                money_var = funding_rate*long_value
         if self.short_position > 1e-3:
             if price_diff > 1e-3:
-                money_var = funding_rating*short_value
+                money_var = funding_rate*short_value
             if price_diff < 1e-3:
-                money_var = -funding_rating*short_value
+                money_var = -funding_rate*short_value
         return money_var
 
     def init_logging_dict(self) -> dict:
         self.log_cols={'episode', 'action', 'state', 'reward', 'done','money',
-            'btc_units','btc_eur','fee_paid', 'btc_price',  'long_wallet', 'short_wallet', 
-            'wallet_value', 'long_position', 'short_position', 'buy_long_count', 
+            'btc_units','btc_eur','fee_paid', 'swap_price', 'btc_price', 'funding_rate', 'long_wallet', 'short_wallet', 
+            'wallet_value', 'long_position', 'short_position', 'buy_long_count' 'short_units', 'short_eur', 
             'sell_long_count', 'buy_short_count', 'sell_short_count'}
         tmp =  { key : [] for key in self.log_cols }
         return tmp
 
     def log_episode_step(self, action, state, reward, done, 
-                    closing_price, fee_paid, btc_units, btc_eur):
+                    closing_price, fee_paid, btc_units, btc_eur, 
+                    funding_rate, btc_price, short_units, short_eur):
         """
         Add params to log dict
         """
@@ -271,10 +292,14 @@ class BTCMarket_Env():
         self.log_dict['btc_eur'].append(btc_eur)
         self.log_dict['long_wallet'].append(self.long_wallet)
         self.log_dict['short_wallet'].append(self.short_wallet)
+        self.log_dict['short_units'].append(self.short_units)
+        self.log_dict['short_eur'].append(self.short_eur)
         self.log_dict['wallet_value'].append(self.wallet_value[0])
         self.log_dict['long_position'].append(self.long_position[0])
         self.log_dict['fee_paid'].append(fee_paid)
-        self.log_dict['btc_price'].append(closing_price)
+        self.log_dict['btc_price'].append(btc_price)
+        self.log_dict['funding_rate'].append(funding_rate)
+        self.log_dict['swap_price'].append(closing_price)
         self.log_dict['short_position'].append(self.short_position[0])
         self.log_dict['buy_long_count'].append(self.buy_long_count)
         self.log_dict['sell_long_count'].append(self.sell_long_count)
@@ -418,7 +443,7 @@ class BTCMarket_Env():
         # Fees paid
         trading_fee = abs(short_variation_eur*self.trading_fee)
         # [euros] Actual amount of euros that go out of or into wallet
-        money_variation = - btc_wallet_variation - trading_fee
+        money_variation = - short_variation_eur - trading_fee
 
         new_amount_btc_in_wallet = self.short_wallet[0] + short_variation_units_BTC
         if new_amount_btc_in_wallet < 1e-6:
@@ -612,7 +637,7 @@ class BTCMarket_Env():
                 print(f"Transaction denied due to lack of available money: {self.money_available} < {np.round(abs(money_variation_out), 2)}")
                 return self.long_wallet, self.short_wallet, 0, 0
 
-            return new_long_wallet, new_short_wallet_out, money_variation, trading_fee
+            return new_long_wallet_out, new_short_wallet_out, money_variation, trading_fee
 
     def _get_new_state(self):
         starting_id = self.ep_timestep - self.window_size
@@ -904,14 +929,13 @@ class BTCMarket_Env():
         return data_in.iloc[start:start+period,:] 
  
     def load_data(self,asset=None,
-            onefile=False, # kept for retro compatibility 
-            ):
+            onefile=False,# kept for retro compatibility 
+            source_file: str = None,):
+
         out=[]
-        for file in os.listdir('./../data'):
-            if asset is not None and asset not in file:
-                continue
-            if 'histData_dt1800.0s' in file:
-                out.append(pd.read_csv('./../data/'+file))
+        for file_ in os.listdir('./../data'):
+            if str(source_file) in str(file_):
+                out.append(pd.read_csv('./../data/'+file_))
         
         out_df=pd.DataFrame(columns=out[0].columns)
         for item in out:

@@ -7,6 +7,8 @@ import random
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+physical_devices = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 from tensorflow import keras
 from tqdm import tqdm_notebook, tqdm
 from matplotlib import pyplot as plt
@@ -282,6 +284,7 @@ class DRLTrainer():
 if __name__ == "__main__":
     obs_space = (8,20)
     act_space = 1
+    action_domain = (-1.0,1.0) # (0.0, 1.0)
 
     money = 10000
     fee = 0.001
@@ -295,11 +298,12 @@ if __name__ == "__main__":
                 trading_fee= fee)
     agent = Trader_Agent(observation_space = obs_space,
                 action_space = act_space,
+                action_domain = action_domain,
                 epsilon = 0.1)
     drltrainer = DRLTrainer(env, agent,
                 observation_space = obs_space,
                 action_space = act_space,
                 batch_size=50,
-                lstm_path = "./../notebooks/best_models/11_mar_2023/lstm_2.h5")
+                lstm_path = "./../notebooks/best_models/11_mar_2023/best_model_sequential_20back_10ahead.h5") # best_model_sequential_20back_10ahead lstm_2
 
     drltrainer.rollout(n_episodes=episodes, run_per_episode=runs_p_eps)
