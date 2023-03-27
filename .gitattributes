@@ -26,6 +26,7 @@
 *.p      binary
 *.pkl    binary
 *.pickle binary
+*.h5     binary
 *.pyc    binary export-ignore
 *.pyo    binary export-ignore
 *.pyd    binary
