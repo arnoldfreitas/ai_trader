@@ -42,7 +42,7 @@ class DRLTrainer():
                 observation_space: tuple, 
                 action_space: int,
                 batch_size: int,
-                epoch: int = 5,
+                epoch: int = 1,
                 gamma: float = 0.95,
                 learning_rate: float =1e-3,
                 algorithm: str = 'DRL',
@@ -290,12 +290,12 @@ if __name__ == "__main__":
 
     env = BTCMarket_Env(observation_space = obs_space,
                 action_space = act_space,
-                reward_function="reward_sortino_ratio",
+                reward_function="reward_differential_sharpe_ratio",
                 start_money = money,
                 trading_fee= fee)
     agent = Trader_Agent(observation_space = obs_space,
                 action_space = act_space,
-                epsilon = 0.5)
+                epsilon = 0.1)
     drltrainer = DRLTrainer(env, agent,
                 observation_space = obs_space,
                 action_space = act_space,

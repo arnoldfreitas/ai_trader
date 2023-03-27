@@ -238,7 +238,7 @@ class Trader_Agent():
             action = []
             for _ in range(self.action_space):
                 action.append(random.uniform(*self.action_domain))
-            return np.array([action])
+            return np.array(action)
       
         # action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size*self.window_size)),verbose = 0)
         action_val = self.model.predict(state,verbose = 0)[0]
