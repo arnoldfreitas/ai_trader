@@ -629,7 +629,7 @@ class BTCMarket_Env():
         #state.append(money)
         return np.array(np.nan_to_num([state]))
 
-    def compute_reward(self, state: np.ndarray, action: np.ndarray,
+    def reward_freestyle(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float,) -> float:
         """
         Function to compute reward based on state and action.
@@ -650,20 +650,8 @@ class BTCMarket_Env():
             Reward Value
         """
 
-        # just a short example but we need to implement array of max profit/loss etc for calculating sharpe & sterling ratio
+        return 0
 
-        past_profit = self.start_money - self.wallet_value # do we actually need it here?
-
-        if action != 0:
-            invest, buy_in, _ = self.inventory[-1]
-            immediate_profit = invest * (state[-5] + actual_price) / buy_in # immediate profit form t to t+1.
-            reward = immediate_profit
-            # if position is 0 ( not invested), and we hold/wait the reward is always 0. Need to chenge that!!!
-            # maybe its automatically good if we take sterling ratio or similar?
-        else:
-            reward = - state[-5] / actual_price * self.money_available # profit der gemacht hätte werden können
-
-        return reward
    
     def compute_reward_from_tutor(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float, trading_fee:float) -> float:
@@ -693,10 +681,10 @@ class BTCMarket_Env():
             pos_yield = 1 - self.wallet_value / self.start_money
         return pos_yield
 
-    def compute_reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float,) -> float:
+    def reward_sharpe_ratio(self, state: np.ndarray, action: np.ndarray,
+                actual_price: float, trading_fee: float) -> float:
         """
-        Function to compute reward based on state and action.
+        Function to compute Sharpe Ratio.
 
         Notes
         -----
@@ -713,33 +701,75 @@ class BTCMarket_Env():
         reward
             Reward Value
         """
-        #TODO: How do we handle the reward function with our action?
 
-        wallet_history = self.log_dict['wallet_value']
+        ### TODO: For all ratios: 
+        # 1. How do we start with the ratio at the beginning?
+        # 2. SHould we use a fixed time period e.g. ratio over maximally 100 timesteps?
+        # 3. If std() is zero?
 
-        # wallet_value for timestep t+1
-        if action != 0:
-            invest, buy_in, _ = self.inventory[-1]
-            invest_new = invest * (state[-5] + actual_price) / buy_in # immediate profit form t to t+1.
-            wallet_new = invest_new + self.money_available
+        # Get historical data
+        if len(self.log_dict['wallet_value']) < 2:
+            wallet_history = [self.start_money, self.start_money]
         else:
-            # case wait: not invested for t AND t-1
-            # TODO: hold
-            wallet_new = self.wallet_value - state[-5] / actual_price * self.money_available # profit der gemacht hätte werden können
-            # state[-5] gibt veränderung btc kurs von t zu t+1 an. -> prozentuale veränderung berechnen & mit money_available verrechnen
-            # MINUS: weil chance verpasst. Wenn kurs gefallen ist, ist state[-5] negativ -> wallet wird größer -> höherer reward, da wait gute aktion war
+            wallet_history = self.log_dict['wallet_value']
 
-        fikitv_new = np.append(wallet_history, wallet_new)
-        cummulative_return = (wallet_new - self.start_money) / self.start_money
-        relative_drawdown = np.maximum.accumulate(fikitv_new) - fikitv_new
-        absolute_drawdown = relative_drawdown / fikitv_new
-        max_drawadown = np.max(absolute_drawdown)
+        #net_returns = wallet_history[-99:-1] - wallet_history[-100:]
+        #wallet_history[1:] - wallet_history[0:-1]
 
-        reward = cummulative_return / (max_drawadown - 0.1)
+        # The net_returns are all returns including timestep t
+        net_returns = wallet_history[1:] - wallet_history[:-1]
+        # calculate net_return for timestep t+1, Equation: return = return to this timestep - new trading_fee
+        return_new_timestep = (self.wallet_value - wallet_history[-1]) - trading_fee
+        net_returns = np.concatenate([net_returns, [return_new_timestep]])
+        # Now compute sharpe ratio
+        if net_returns.std() == 0:
+            return 0
+        else:
+            SR = net_returns.mean() / net_returns.std()
+            return SR
 
-        return reward
+    def reward_sortino_ratio(self, state: np.ndarray, action: np.ndarray,
+                actual_price: float, trading_fee: float) -> float:
+        """
+        Function to compute Sortino Ratio.
 
-    def reward_DSR(self, state: np.ndarray, action: np.ndarray,
+        Notes
+        -----
+        build state as in rl_agent.AI_Trader.get_reward_money
+
+        Parameters
+        ----------
+        state: np.ndarray, 
+        action: np.ndarray,
+        actual_price: float
+            Acutal BTC Price
+        Returns
+        -------
+        reward
+            Reward Value
+        """
+
+        if len(self.log_dict['wallet_value']) < 2:
+            wallet_history = [self.start_money, self.start_money]
+        else:
+            wallet_history = self.log_dict['wallet_value']
+
+        # The net_returns are all returns including timestep t
+        net_returns = wallet_history[1:] - wallet_history[:-1]
+        # calculate net_return for timestep t+1, Equation: return = return to this timestep - new trading_fee
+        return_new_timestep = (self.wallet_value - wallet_history[-1]) - trading_fee
+        net_returns = np.concatenate([net_returns, [return_new_timestep]])
+        # build array with all negative profits that were made
+        mask_negative_net_returns = net_returns < 0
+        negative_net_returns = net_returns[mask_negative_net_returns]
+        # Now compute sortino ratio
+        if negative_net_returns.std() == 0:
+            return 0
+        else:
+            STR = net_returns.mean() / negative_net_returns.std()
+            return STR
+
+    def reward_differential_sharpe_ratio(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float, trading_fee: float) -> float:
         """
         Function to compute Differential Sharpe Ratio.
@@ -759,9 +789,12 @@ class BTCMarket_Env():
         reward
             Reward Value
         """
-        # Look at Paper DRRL-Agent and Link in Word in googledrive for calculation dateils
+        # Look at Paper DRRL-Agent and Link in Word in googledrive for calculation details
+        # Eventually evaluate these paraeters through grid-search
         # tau_decay parameter 
         tau_decay = 0.9999
+        # Gamma is set to this value in the paper (rrl agent)
+        gamma = 0.00001
         # get historical data for calculations
         if len(self.log_dict['btc_price']) < 2:
             btc_close_price_history = [actual_price, actual_price]
@@ -774,25 +807,53 @@ class BTCMarket_Env():
 
         # execution cost should be the difefrence between bid and ask + trading_fee
         execution_cost = trading_fee # + spread (bid-ask)
-        old_action = action_history[-1]
-        old_price_t = btc_close_price_history[-1]
-        old_price_t1 = btc_close_price_history[-2]
-        # absolute price change t-1 to t
-        price_change = old_price_t - old_price_t1
+        price_change = actual_price - btc_close_price_history[-1]
+        # calculate representative_return for timestep t+1
+        representative_return = (action_history[-1] * price_change) - execution_cost # - funding_cost * action  
+        self.variance_returns_squared = tau_decay * self.variance_returns_squared + (1 - tau_decay) * (representative_return - self.expected_return)**2
+        self.expected_return = tau_decay * self.expected_return + (1 - tau_decay) * representative_return
+        # Calculate DSR utility
+        DSR = self.expected_return - gamma / 2 * self.variance_returns_squared
+        return DSR
 
-        # net return in an abstract manner, these are not exactly the immediate_profits, but represent positive and negative rewards
-        # makes sense because the trader has to learn to trade with percentages of his wallet. He should get more profit just from having 
-        # a higher amout of start_money     
-        net_return = price_change * old_action - execution_cost # - funding_cost * action
-        self.variance_returns_squared = tau_decay * self.variance_returns_squared + (1 - tau_decay) * (net_return - self.expected_return)**2
-        self.expected_return = tau_decay * self.expected_return + (1 - tau_decay) * net_return
+    def reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,
+                actual_price: float,) -> float:
+        """
+        Function to compute Sterling Ratio.
 
-        # Gamma is set to this value in the paper (rrl agent)
-        gamma = 0.00001
-        #gamma = 252**0.5 * (self.expected_return - baseline_profit) / self.variance_returns_squared
-        utility = self.expected_return - gamma / 2 * self.variance_returns_squared
+        Notes
+        -----
+        build state as in rl_agent.AI_Trader.get_reward_money
 
-        return utility
+        Parameters
+        ----------
+        state: np.ndarray, 
+        action: np.ndarray,
+        actual_price: float
+            Acutal BTC Price
+        Returns
+        -------
+        reward
+            Reward Value
+        """
+
+        # Get histroical data
+        if len(self.log_dict['wallet_value']) < 2:
+            wallet_history = [self.start_money, self.start_money]
+        else:
+            wallet_history = self.log_dict['wallet_value']
+
+        # Build array of complete wallet_history
+        wallet_history = np.concatenate([wallet_history, [self.wallet_value]])
+        cummulative_return = (self.wallet_value - self.start_money) / self.start_money
+        # CXalculate max Drawdown in given time period
+        relative_drawdown = np.maximum.accumulate(wallet_history) - wallet_history
+        absolute_drawdown = relative_drawdown / wallet_history
+        max_drawadown = np.max(absolute_drawdown)
+
+        # Compute Sterling Ratio
+        STRR = cummulative_return / (max_drawadown + 0.1)
+        return STRR
 
     def sigmoid(self,x):
         try:
