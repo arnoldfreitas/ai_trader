@@ -164,7 +164,7 @@ class BTCMarket_Env():
         short_value= 0
         if self.long_position > 1e-3:
             long_value = self.long_wallet[0]*actual_price
-            short_value = self.short_wallet[0]*(self.short_wallet[1] - actual_price)
+            short_value = self.short_wallet[0]*(2*self.short_wallet[1] - actual_price)
             # Compute Funding payment every 8 hours
             funding_money_var = 0
             if ((self.ep_timestep % 16 == 0) and self.ep_timestep > 1):
@@ -179,7 +179,7 @@ class BTCMarket_Env():
             self.long_position = long_value / self.wallet_value
         if self.short_position > 1e-3:
             long_value = self.long_wallet[0]*actual_price
-            short_value = self.short_wallet[0]*(self.short_wallet[1] - actual_price)
+            short_value = self.short_wallet[0]*(2*self.short_wallet[1] - actual_price)
             # Compute Funding payment every 8 hours
             funding_money_var = 0
             if ((self.ep_timestep % 16 == 0) and self.ep_timestep > 1):
@@ -209,14 +209,14 @@ class BTCMarket_Env():
         self.long_wallet = new_long_wallet
         self.short_wallet = new_short_wallet
         # True wallet_value, either long or short will be 0
-        self.wallet_value = np.round(self.money_available + new_long_wallet[0] * actual_price + new_short_wallet[0] * actual_price, 2)
+        self.wallet_value = np.round(self.money_available + new_long_wallet[0] * actual_price + new_short_wallet[0] *(2*new_short_wallet[1] - actual_price), 2)
         # Both positions have to be upgraded in case we sold and bought in one step
         long_val = np.round(new_long_wallet[0] * actual_price , 2)
-        short_val = np.round(new_short_wallet[0] * (new_short_wallet[1] - actual_price) , 2)
+        short_val = np.round(new_short_wallet[0] * (2*new_short_wallet[1] - actual_price) , 2)
         self.long_position = np.round(long_val / self.wallet_value, 2)
         self.short_position = np.round(short_val / self.wallet_value, 2)
         test_action = np.round(new_long_wallet[0] * actual_price / self.wallet_value \
-            + new_short_wallet[0] * (new_short_wallet[1] - actual_price) / self.wallet_value, 3) # long or short will be zero
+            + new_short_wallet[0] * (2*new_short_wallet[1] - actual_price) / self.wallet_value, 3) # long or short will be zero
         if not( abs(test_action - abs(action[0])) < 1e-1 ):
                 print(f"Value not Expected after action:\n \
         action: {action}; test_action: {test_action};\n \
@@ -244,7 +244,7 @@ class BTCMarket_Env():
                 btc_units = new_long_wallet[0],
                 short_units =  new_short_wallet[0], 
                 btc_eur= new_long_wallet[0]*new_long_wallet[1],
-                short_eur = new_short_wallet[0]*(new_short_wallet[1]-actual_price))
+                short_eur = new_short_wallet[0]*(2*new_short_wallet[1]-actual_price))
 
         return state, reward, done
 
@@ -572,7 +572,7 @@ class BTCMarket_Env():
                 new_short_wallet_out = new_short_wallet
                 money_variation_out += money_variation
 
-                tmp_wallet_value = np.round(self.money_available + money_variation_out + tmp_long_position*tmp_wallet_value + new_short_wallet_out[0]*btc_price, 2)
+                tmp_wallet_value = np.round(self.money_available + money_variation_out + tmp_long_position*tmp_wallet_value + new_short_wallet_out[0]*(2*new_short_wallet[1] - btc_price), 2)
             
             btc_wallet_variation = new_position - tmp_long_position
 
@@ -597,7 +597,7 @@ class BTCMarket_Env():
             ### we negate the position for shorts, so that positive value means we buy shorts and negative means we sell shorts
             short_pos = abs(new_position)
             # compute btc_wallet_variation, if we are already short and want to buy more short or sell some shorts 
-            if abs(short_pos - (self.short_wallet[0]*btc_price) / self.wallet_value) < trade_tol:
+            if abs(short_pos - (self.short_wallet[0]*(2*self.short_wallet[1] - btc_price)) / self.wallet_value) < trade_tol:
                 # in case the change in investment is smaller than 0.1% of wallet_value, we hold
                 return self.long_wallet, self.short_wallet, 0, 0
             
@@ -616,7 +616,7 @@ class BTCMarket_Env():
                 money_variation_out += money_variation
 
                 tmp_wallet_value = np.round(self.money_available + money_variation_out + tmp_short_position*tmp_wallet_value + new_long_wallet[0]*btc_price, 2)
-                tmp_short_position = (self.short_wallet[0]*btc_price)/tmp_wallet_value
+                tmp_short_position = (self.short_wallet[0]*(2*self.short_wallet[1] - btc_price))/tmp_wallet_value
 
     
             btc_wallet_variation = short_pos - tmp_short_position
