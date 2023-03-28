@@ -73,7 +73,7 @@ class BTCMarket_Env():
         # Params for logging
         time_str=datetime.now().strftime('%Y%m%d_%H%M%S')
         self.log_folder=os.path.abspath(os.path.join(self.data_path, 
-                                        time_str, RL_Algo))
+                                        time_str, RL_Algo, 'episodes'))
         self.log_dict = None
 
     def _update_log_folder(self, new_log_folder):

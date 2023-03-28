@@ -142,7 +142,7 @@ class DRLTrainer():
                 for t in tqdm(range(data_samples)):
                 # for t in tqdm(range(100)):
                     # Compute Action
-                    tmp_wallet_value = env.wallet_value[0]
+                    tmp_wallet_value = self.env.wallet_value[0]
                     action = self.agent.compute_action(state)
                     # round action to one decimal point (that we dont take to small actions)
                     rounded_action = np.round(action, 1) ####### we also round the action in the env.step() function, just leave both for extra safety.
@@ -151,7 +151,7 @@ class DRLTrainer():
                     # save Experience to Memory
                     self.memory.append((state, action, reward, next_state, done))
                     state = next_state
-                    step_profit = env.wallet_value[0] - tmp_wallet_value
+                    step_profit = self.env.wallet_value[0] - tmp_wallet_value
                     run_profit += step_profit
 
                     # save to logging
@@ -254,7 +254,7 @@ class DRLTrainer():
         result=self.agent.model.fit(x_train, y_target,
                 epochs=self.epoch, verbose=1)
 
-        agent.update_epsilon()
+        self.agent.update_epsilon()
         return result
 
     def save_data(self,episode,train_data,save_model=True):
@@ -310,3 +310,4 @@ if __name__ == "__main__":
                 lstm_path = "./../notebooks/best_models/11_mar_2023/best_model_sequential_20back_10ahead.h5") # best_model_sequential_20back_10ahead lstm_2
 
     drltrainer.rollout(n_episodes=episodes, run_per_episode=runs_p_eps)
+

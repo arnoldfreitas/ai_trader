@@ -28,6 +28,7 @@ class DQNTrainer():
                 batch_size: int,
                 epoch : int = 5, 
                 gamma: float = 0.95,
+                learning_rate: float =1e-3,
                 algorithm: str = 'DQN',
                 lstm_path: str = None,
                 data_path: str ='./../data',) -> None:
@@ -67,9 +68,9 @@ class DQNTrainer():
         self.env._update_log_folder(self.train_folder)
         
         # Init agent controllable params
-        # self.agent.build_model() # INIT MODEL
-
-        self.agent.build_model_LSTM(lstm_path=lstm_path) 
+        # self.agent.build_model() # INIT MODEL 
+        self.agent.build_model_LSTM(learning_rate=learning_rate,
+                                    lstm_path=lstm_path) 
         
 
     def rollout(self, n_episodes, run_per_episode):
@@ -117,7 +118,7 @@ class DQNTrainer():
                 state, _, _ = self.env.step(np.array([0]))
                 for t in tqdm(range(data_samples)):
                     # Compute Action
-                    tmp_wallet_value = env.wallet_value
+                    tmp_wallet_value = self.env.wallet_value
                     action = self.agent.compute_action(state)
                     # Transform Action from Policy to Env Requirement 
                     dqn_action = self.transform_to_dqn_action(action)
@@ -126,7 +127,7 @@ class DQNTrainer():
                     # save Experience to Memory
                     self.memory.append((state, action, reward, next_state, done))
                     state = next_state
-                    step_profit = env.wallet_value - tmp_wallet_value
+                    step_profit = self.env.wallet_value - tmp_wallet_value
                     run_profit += step_profit
                     # save to logging
                     self.log_training(episode, run, action, state, reward, done, self.agent.epsilon)
@@ -258,7 +259,7 @@ class DQNTrainer():
         # Batch Train
         result=self.agent.model.fit(x_train, y_train, 
                 epochs=self.epoch, verbose=1)
-        agent.update_epsilon()
+        self.agent.update_epsilon()
         return result
 
     def save_data(self,episode,train_data,save_model=True):
