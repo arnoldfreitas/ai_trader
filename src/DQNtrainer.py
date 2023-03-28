@@ -130,7 +130,7 @@ class DQNTrainer():
                     step_profit = self.env.wallet_value - tmp_wallet_value
                     run_profit += step_profit
                     # save to logging
-                    self.log_training(episode, run, action, state, reward, done, self.agent.epsilon)
+                    self.log_training(episode, run, action, state, reward, done, self.agent.epsilon, run_profit)
                     # Check if is Done
                     if done:
                         env.log_episode_to_file(episode=episode, run=run)    
@@ -165,11 +165,11 @@ class DQNTrainer():
 
     def init_logging_dict(self) -> dict:
         self.log_cols=['episode', 'run', 'action', 'state', 
-                    'reward', 'done','epsilon']
+                    'reward', 'done','epsilon', 'profit']
         return dict.fromkeys(self.log_cols, [])
  
     def log_training(self, episode, run, action, state, reward, done, 
-                epsilon):
+                epsilon, run_profit):
         """
         Add params to log dict
         """
@@ -180,6 +180,7 @@ class DQNTrainer():
         self.train_log_dict['reward'].append(reward)
         self.train_log_dict['done'].append(done)
         self.train_log_dict['epsilon'].append(epsilon)
+        self.train_log_dict['profit'].append(run_profit)
 
     def transform_to_dqn_action(self, actions):
         """
