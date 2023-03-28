@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import shutil
 import random
+import time
 
 import numpy as np
 import pandas as pd
@@ -95,6 +96,7 @@ class DQNTrainer():
         """
         train_cnt = 0
         total_profit = 0
+        start_time = time.time()
         # Loop over every episode
         # for episode in range(1):
         for episode in range(1, n_episodes + 1):
@@ -102,7 +104,7 @@ class DQNTrainer():
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
                 self.agent.update_epsilon(increase_epsilon=0.5)
                 print(f'on Episode {episode} set Eplison to {self.agent.epsilon} to find global minimum')
-            run_profit=0.0 # Init Profit on episode
+            run_profit = 0.0 # Init Profit on episode
             # Loop inside one episode over number runs 
             # for run in range(1):
             for run in range(1,run_per_episode+1):
@@ -112,13 +114,13 @@ class DQNTrainer():
                     self.agent.update_epsilon(increase_epsilon=0.5 -(run/run_per_episode)*0)
                     print(f'on Run {run} set Eplison to {self.agent.epsilon} to find global minimum')
                 train_data={}
-                run_profit = 0
+                run_profit = 0.0
                 self.env.reset()
                 data_samples = self.env.episode_length
                 state, _, _ = self.env.step(np.array([0]))
                 for t in tqdm(range(data_samples)):
                     # Compute Action
-                    tmp_wallet_value = self.env.wallet_value
+                    tmp_wallet_value = self.env.wallet_value[0]
                     action = self.agent.compute_action(state)
                     # Transform Action from Policy to Env Requirement 
                     dqn_action = self.transform_to_dqn_action(action)
@@ -127,13 +129,15 @@ class DQNTrainer():
                     # save Experience to Memory
                     self.memory.append((state, action, reward, next_state, done))
                     state = next_state
-                    step_profit = self.env.wallet_value - tmp_wallet_value
+                    step_profit = self.env.wallet_value[0] - tmp_wallet_value
                     run_profit += step_profit
+
                     # save to logging
-                    self.log_training(episode, run, action, state, reward, done, self.agent.epsilon, run_profit)
+                    elapsed_time = time.time() - start_time
+                    self.log_training(episode, run, action, state, reward, done, self.agent.epsilon, run_profit, elapsed_time)
                     # Check if is Done
                     if done:
-                        env.log_episode_to_file(episode=episode, run=run)    
+                        self.env.log_episode_to_file(episode=episode, run=run)    
                         break
 
                     # Train Policy if batch reached
@@ -159,17 +163,18 @@ class DQNTrainer():
             
             # Log Episode Info to Screen
             total_profit+=run_profit
-            print(f'episode {episode}/{episodes}. Profit {total_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
+            print(f'episode {episode}/{n_episodes}. Profit {total_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
 
             self.save_data(episode,train_data,save_model=True)
 
     def init_logging_dict(self) -> dict:
         self.log_cols=['episode', 'run', 'action', 'state', 
-                    'reward', 'done','epsilon', 'profit']
-        return dict.fromkeys(self.log_cols, [])
+                    'reward', 'done','epsilon', 'profit', 'time_elapsed']
+        tmp =  { key : [] for key in self.log_cols }
+        return tmp
  
     def log_training(self, episode, run, action, state, reward, done, 
-                epsilon, run_profit):
+                epsilon, profit, time_elapsed):
         """
         Add params to log dict
         """
@@ -180,7 +185,8 @@ class DQNTrainer():
         self.train_log_dict['reward'].append(reward)
         self.train_log_dict['done'].append(done)
         self.train_log_dict['epsilon'].append(epsilon)
-        self.train_log_dict['profit'].append(run_profit)
+        self.train_log_dict['profit'].append(profit)
+        self.train_log_dict['time_elapsed'].append(time_elapsed)
 
     def transform_to_dqn_action(self, actions):
         """

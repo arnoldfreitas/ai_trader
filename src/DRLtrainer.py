@@ -12,6 +12,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tqdm import tqdm_notebook, tqdm
 from matplotlib import pyplot as plt
+import time
 
 from env import BTCMarket_Env
 from agent import Trader_Agent
@@ -118,6 +119,7 @@ class DRLTrainer():
         """
         train_cnt = 0
         total_profit = 0
+        start_time = time.time()
         # Loop over every episode
         # for episode in range(1):
         for episode in range(1, n_episodes + 1):
@@ -135,7 +137,7 @@ class DRLTrainer():
                     self.agent.update_epsilon(increase_epsilon=0.5 -(run/run_per_episode)*0) # *0 why?
                     print(f'on Run {run} set Eplison to {self.agent.epsilon} to find global minimum')
                 train_data={}
-                run_profit = 0
+                run_profit = 0.0
                 self.env.reset()
                 data_samples = self.env.episode_length
                 state, _, _ = self.env.step(np.array([0]))
@@ -145,7 +147,7 @@ class DRLTrainer():
                     tmp_wallet_value = self.env.wallet_value[0]
                     action = self.agent.compute_action(state)
                     # round action to one decimal point (that we dont take to small actions)
-                    rounded_action = np.round(action, 1) ####### we also round the action in the env.step() function, just leave both for extra safety.
+                    rounded_action = np.round(action, 1) ####### we also round the action in the step() function, just leave both for extra safety.
                     # Compute new step
                     next_state, reward, done = self.env.step(action=rounded_action)
                     # save Experience to Memory
@@ -155,10 +157,11 @@ class DRLTrainer():
                     run_profit += step_profit
 
                     # save to logging
-                    self.log_training(episode, run, action, state, reward, done, self.agent.epsilon, run_profit)
+                    elapsed_time = time.time() - start_time
+                    self.log_training(episode, run, action, state, reward, done, self.agent.epsilon, run_profit, elapsed_time)
                     # Check if is Done
                     if done:
-                        env.log_episode_to_file(episode=episode, run=run)    
+                        self.env.log_episode_to_file(episode=episode, run=run)    
                         break
 
                     # Train Policy if batch reached
@@ -184,17 +187,18 @@ class DRLTrainer():
             
             # Log Episode Info to Screen
             total_profit+=run_profit
-            print(f'episode {episode}/{episodes}. Profit {total_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
+            print(f'episode {episode}/{n_episodes}. Profit {total_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
 
             self.save_data(episode,train_data,save_model=True)
 
     def init_logging_dict(self) -> dict:
         self.log_cols=['episode', 'run', 'action', 'state', 
-                    'reward', 'done','epsilon', 'profit']
-        return dict.fromkeys(self.log_cols, [])
+                    'reward', 'done','epsilon', 'profit', 'time_elapsed']
+        tmp =  { key : [] for key in self.log_cols }
+        return tmp
  
     def log_training(self, episode, run, action, state, reward, done, 
-                epsilon, run_profit):
+                epsilon, profit, time_elapsed):
         """
         Add params to log dict
         """
@@ -205,7 +209,8 @@ class DRLTrainer():
         self.train_log_dict['reward'].append(reward)
         self.train_log_dict['done'].append(done)
         self.train_log_dict['epsilon'].append(epsilon)
-        self.train_log_dict['profit'].append(run_profit)
+        self.train_log_dict['profit'].append(profit)
+        self.train_log_dict['time_elapsed'].append(time_elapsed)
 
     def batch_train(self):
         """
