@@ -33,6 +33,8 @@ class BTCMarket_Env():
         # General Information Params
         self.ep_count = 0
         self.data_path = data_path
+        self.asset =  asset
+        self.asset_is_btc = "BTC" in asset
         self.data_source = self.load_data(asset=asset, onefile=False, source_file=source_file)
         self.len_source = len(self.data_source)
         # print(f"{type(self.data_source), type(self.data_source[0])}")
@@ -73,7 +75,7 @@ class BTCMarket_Env():
         # Params for logging
         time_str=datetime.now().strftime('%Y%m%d_%H%M%S')
         self.log_folder=os.path.abspath(os.path.join(self.data_path, 
-                                        time_str, RL_Algo, 'episodes'))
+                                        time_str, f"{RL_Algo}_{asset}", 'episodes'))
         self.log_dict = None
 
     def _update_log_folder(self, new_log_folder):
@@ -152,10 +154,15 @@ class BTCMarket_Env():
         assert (self.ep_data is not None)
 
         actual_price = self.ep_data['close'].values[self.ep_timestep]
-        actual_price_btc = self.ep_data['Close_BTC'].values[self.ep_timestep]
-        funding_rating = self.ep_data['Funding_Rate'].values[self.ep_timestep]
-        funding_rating = float(funding_rating.replace("%", ""))/100
-        price_diff= actual_price - self.ep_data['close'].values[min(0,self.ep_timestep-1)]
+        if not self.asset_is_btc:
+            actual_price_btc = self.ep_data['Close_BTC'].values[self.ep_timestep]
+            funding_rating = self.ep_data['Funding_Rate'].values[self.ep_timestep]
+            funding_rating = float(funding_rating.replace("%", ""))/100
+            price_diff= actual_price - self.ep_data['close'].values[min(0,self.ep_timestep-1)]
+        else:
+            actual_price_btc = self.ep_data['close'].values[self.ep_timestep]
+            price_diff = 0
+            funding_rating = 0
         action = np.round(action, 2) # reduce action to 2 decimals to avoid micro transactions
         alt_long = self.long_wallet
 
@@ -167,7 +174,7 @@ class BTCMarket_Env():
             short_value = self.short_wallet[0]*(2*self.short_wallet[1] - actual_price)
             # Compute Funding payment every 8 hours
             funding_money_var = 0
-            if ((self.ep_timestep % 16 == 0) and self.ep_timestep > 1):
+            if ((self.ep_timestep % 16 == 0) and (self.ep_timestep > 1) and (not self.asset_is_btc)):
                 funding_money_var = self.compute_funding(actual_price_swap = actual_price, 
                                                         price_btc = actual_price_btc, 
                                                         long_value = long_value, 
@@ -182,7 +189,7 @@ class BTCMarket_Env():
             short_value = self.short_wallet[0]*(2*self.short_wallet[1] - actual_price)
             # Compute Funding payment every 8 hours
             funding_money_var = 0
-            if ((self.ep_timestep % 16 == 0) and self.ep_timestep > 1):
+            if ((self.ep_timestep % 16 == 0) and (self.ep_timestep > 1) and (not self.asset_is_btc)):
                 funding_money_var = self.compute_funding(actual_price_swap = actual_price, 
                                                         price_btc = actual_price_btc, 
                                                         long_value = long_value, 
@@ -313,7 +320,7 @@ class BTCMarket_Env():
         os.makedirs(self.log_folder, exist_ok=True)
         
         df = pd.DataFrame.from_dict(self.log_dict)
-        df.to_csv(self.log_folder + f"/Epi_{episode}_run_{run}.csv")
+        df.to_csv(self.log_folder + f"/Epi_{episode}_run_{run}_{self.asset}.csv")
 
     def _handle_long_position(self,
             btc_wallet_variation:float, 
@@ -737,7 +744,7 @@ class BTCMarket_Env():
             Reward Value
         """
 
-        pos_yield = self.wallet_value / self.start_money
+        pos_yield = self.wallet_value / self.start_money - 1
         return pos_yield
 
     def reward_sharpe_ratio(self, state: np.ndarray, action: np.ndarray,

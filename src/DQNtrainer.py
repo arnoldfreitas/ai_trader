@@ -66,7 +66,7 @@ class DQNTrainer():
         self.train_log_dataframe = pd.DataFrame(columns=self.log_cols)
 
         # Init env controllable params
-        self.env._update_log_folder(self.train_folder)
+        self.env._update_log_folder(os.path.abspath(os.path.join(self.train_folder, 'episodes')))
         
         # Init agent controllable params
         # self.agent.build_model() # INIT MODEL 
@@ -154,7 +154,7 @@ class DQNTrainer():
 
                     # Checkpoint data
                     if t >=100 and t % 100 == 0:
-                        self.save_data(episode,train_data,save_model=False)
+                        self.save_data(episode,train_data,save_model=True)
                         # Log Checkpoint Info to Screen
                         print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
                 
