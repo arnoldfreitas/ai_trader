@@ -270,7 +270,7 @@ class BTCMarket_Env():
     def init_logging_dict(self) -> dict:
         self.log_cols={'episode', 'action', 'state', 'reward', 'done','money',
             'btc_units','btc_eur','fee_paid', 'swap_price', 'btc_price', 'funding_rate', 'long_wallet', 'short_wallet', 
-            'wallet_value', 'long_position', 'short_position', 'buy_long_count' 'short_units', 'short_eur', 
+            'wallet_value', 'long_position', 'short_position', 'buy_long_count', 'short_units', 'short_eur', 
             'sell_long_count', 'buy_short_count', 'sell_short_count'}
         tmp =  { key : [] for key in self.log_cols }
         return tmp
@@ -292,8 +292,8 @@ class BTCMarket_Env():
         self.log_dict['btc_eur'].append(btc_eur)
         self.log_dict['long_wallet'].append(self.long_wallet)
         self.log_dict['short_wallet'].append(self.short_wallet)
-        self.log_dict['short_units'].append(self.short_units)
-        self.log_dict['short_eur'].append(self.short_eur)
+        self.log_dict['short_units'].append(short_units)
+        self.log_dict['short_eur'].append(short_eur)
         self.log_dict['wallet_value'].append(self.wallet_value[0])
         self.log_dict['long_position'].append(self.long_position[0])
         self.log_dict['fee_paid'].append(fee_paid)
@@ -354,14 +354,14 @@ class BTCMarket_Env():
                     tmp_long_position * tmp_wallet_value)) / \
                     (1+np.sign(btc_wallet_variation) * self.trading_fee * new_position) 
         #  [euros] Amount of euros of BTC to trade in order to have the given final position
-        long_variation_eur = long_at_end_of_step - tmp_long_position*tmp_wallet_value
+        long_variation_eur =  long_at_end_of_step - tmp_long_position*tmp_wallet_value 
         # long_variation_eur = np.min([long_at_end_of_step - tmp_long_position*tmp_wallet_value, self.money_available*(1-self.trading_fee)])
         # [units of btc] Amount of BTC bought with long_invest_eur
         long_variation_units_BTC = long_variation_eur / btc_price
         # Fees paid
         trading_fee = abs(long_variation_eur*self.trading_fee)
         # [euros] Actual amount of euros that go out of or into wallet
-        money_variation = - long_variation_eur - trading_fee
+        money_variation =  - long_variation_eur - trading_fee
 
         new_amount_btc_in_wallet = self.long_wallet[0] + long_variation_units_BTC
         if new_amount_btc_in_wallet < 1e-6:
@@ -737,11 +737,7 @@ class BTCMarket_Env():
             Reward Value
         """
 
-        pos_yield = 0.0
-        if self.long_wallet[1] > 0.0:
-            pos_yield = actual_price / self.long_wallet[1]
-        else:
-            pos_yield = 1 - self.wallet_value / self.start_money
+        pos_yield = self.wallet_value / self.start_money
         return pos_yield
 
     def reward_sharpe_ratio(self, state: np.ndarray, action: np.ndarray,

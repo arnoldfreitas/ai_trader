@@ -7,8 +7,8 @@ import random
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-physical_devices = tf.config.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
+# physical_devices = tf.config.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 from tensorflow import keras
 from tqdm import tqdm_notebook, tqdm
 from matplotlib import pyplot as plt
@@ -87,6 +87,7 @@ class DRLTrainer():
         self.env._update_log_folder(self.train_folder)
         
         # Init agent controllable params and init model
+        self.loss_shift = 1.0
         custom_loss = DRLLossFunctions()
         # self.agent.build_model(learning_rate=learning_rate,
         #                        loss_function=custom_loss) 
@@ -246,6 +247,8 @@ class DRLTrainer():
             x_train[index] = state[0]
             y_target[index,0] = reward
 
+        # self.loss_shift = np.max(np.append(y_target[:,0], self.loss_shift, axis=0)) * 1.1
+        # y_target = self.loss_shift - y_target
         # Batch Train (in this case on-line traing without batches) 
         # we can just set the batch to 1 and it will do online training
         result=self.agent.model.fit(x_train, y_target,

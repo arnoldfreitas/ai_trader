@@ -10,7 +10,7 @@ boto3==1.26.15
 botocore==1.29.15
 cachetools==4.2.2
 certifi==2021.5.30
-cffi==1.14.5
+# cffi==1.14.5
 chardet==4.0.0
 click==8.0.1
 cloudpickle==2.2.0
@@ -40,12 +40,10 @@ google-crc32c==1.5.0
 google-pasta==0.2.0
 google-resumable-media==2.4.0
 googleapis-common-protos==1.57.0
-graphsurgeon @ file:///workspace/TensorRT-7.2.3.4/graphsurgeon/graphsurgeon-0.4.5-py2.py3-none-any.whl
 grpcio==1.34.1
 gunicorn==20.1.0
 h11==0.12.0
 h5py==3.1.0
-horovod @ file:///opt/tensorflow/horovod-source/dist/horovod-0.22.0.tar.gz
 httplib2==0.21.0
 httptools==0.2.0
 idna==2.10
@@ -60,7 +58,6 @@ json5==0.9.5
 jsonschema==3.2.0
 jupyter-client==6.1.12
 jupyter-core==4.7.1
-jupyter-tensorboard @ git+https://github.com/cliffwoolley/jupyter_tensorboard.git@ffa7e26138b82549453306e06b535a9ac36db17a
 jupyterlab==2.3.1
 jupyterlab-pygments==0.1.2
 jupyterlab-server==1.2.0
@@ -92,7 +89,6 @@ notebook==6.2.0
 numpy==1.22.3
 nvidia-dali-cuda110==1.2.0
 nvidia-dali-tf-plugin-cuda110==1.2.0
-nvidia-dlprofviewer @ file:///nvidia/opt/dlprof_viewer_install/nvidia_dlprofviewer-1.2.0-py3-none-any.whl
 nvtx-plugins==0.1.8
 oauthlib==3.1.1
 opt-einsum==3.3.0
@@ -141,12 +137,10 @@ tensorboard==2.10.1
 tensorboard-data-server==0.6.1
 tensorboard-plugin-wit==1.8.0
 tensorflow==2.10.0
-tensorflow-addons @ file:///opt/tensorflow/tf-addons/artifacts/tensorflow_addons-0.13.1-cp38-cp38-linux_x86_64.whl
 tensorflow-datasets==3.2.1
 tensorflow-estimator==2.10.0
 tensorflow-io-gcs-filesystem==0.31.0
 tensorflow-metadata==1.0.0
-tensorrt @ file:///workspace/TensorRT-7.2.3.4/python/tensorrt-7.2.3.4-cp38-none-linux_x86_64.whl
 termcolor==1.1.0
 terminado==0.10.1
 testpath==0.5.0
@@ -159,7 +153,6 @@ typeguard==2.12.1
 typer==0.7.0
 typing==3.7.4.3
 typing-extensions==4.4.0
-uff @ file:///workspace/TensorRT-7.2.3.4/uff/uff-0.6.9-py2.py3-none-any.whl
 uritemplate==3.0.1
 urllib3==1.26.5
 uvicorn==0.14.0
