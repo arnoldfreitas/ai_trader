@@ -178,10 +178,11 @@ class DRLTrainer():
 
                     # Checkpoint data
                     if t >=100 and t % 100 == 0:
-                        self.save_data(episode,train_data,save_model=True)
+                        self.save_data(episode,train_data,save_model=False)
                         # Log Checkpoint Info to Screen
                         print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
                 
+                self.save_data(episode,train_data,save_model=True)
                 # Log Run Info to Screen
                 print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
             
@@ -258,7 +259,7 @@ class DRLTrainer():
         # Batch Train (in this case on-line traing without batches) 
         # we can just set the batch to 1 and it will do online training
         result=self.agent.model.fit(x_train, y_target,
-                epochs=self.epoch, verbose=1)
+                epochs=self.epoch, verbose=0)
 
         self.agent.update_epsilon()
         return result

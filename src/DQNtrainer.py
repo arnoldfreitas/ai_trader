@@ -137,7 +137,7 @@ class DQNTrainer():
                     self.log_training(episode, run, action, state, reward, done, self.agent.epsilon, run_profit, elapsed_time)
                     # Check if is Done
                     if done:
-                        self.env.log_episode_to_file(episode=episode, run=run)    
+                        self.env.log_episode_to_file(episode=episode, run=run)
                         break
 
                     # Train Policy if batch reached
@@ -154,13 +154,14 @@ class DQNTrainer():
 
                     # Checkpoint data
                     if t >=100 and t % 100 == 0:
-                        self.save_data(episode,train_data,save_model=True)
+                        self.save_data(episode,train_data,save_model=False)
                         # Log Checkpoint Info to Screen
                         print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
                 
                 # Log Run Info to Screen
                 print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
             
+            self.save_data(episode,train_data,save_model=True)
             # Log Episode Info to Screen
             total_profit+=run_profit
             print(f'episode {episode}/{n_episodes}. Profit {total_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
@@ -265,7 +266,7 @@ class DQNTrainer():
 
         # Batch Train
         result=self.agent.model.fit(x_train, y_train, 
-                epochs=self.epoch, verbose=1)
+                epochs=self.epoch, verbose=0)
         self.agent.update_epsilon()
         return result
 
