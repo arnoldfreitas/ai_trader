@@ -63,7 +63,7 @@ class DQNTrainer():
         self.train_folder=os.path.abspath(os.path.join(self.data_path, 
                     time_str, algorithm))
         self.train_log_dict = self.init_logging_dict()
-        self.train_log_dataframe = pd.DataFrame(columns=self.log_cols)
+        # self.train_log_dataframe = pd.DataFrame(columns=self.log_cols)
 
         # Init env controllable params
         self.env._update_log_folder(os.path.abspath(os.path.join(self.train_folder, 'episodes')))
@@ -288,13 +288,19 @@ class DQNTrainer():
         if save_model:
             self.agent.model.save(self.train_folder+"models_ai_trade_{}_{}.h5".format(time_str,episode))
         
+        df_path = self.train_folder + f"/Trainer_Data_{episode}.csv"
+        train_log_dataframe = pd.DataFrame(columns=self.log_cols)
+        if os.path.exists(df_path):
+            train_log_dataframe= pd.read_csv(df_path, sep=';')
+        
         # Save info from checkpoint to train_log_dataframe
         tmp = pd.DataFrame.from_dict(self.train_log_dict)
-        self.train_log_dataframe = pd.concat([self.train_log_dataframe, tmp])
+        train_log_dataframe = pd.concat([train_log_dataframe, tmp])
         # Reinit log dict to avoid double logging
         self.train_log_dict = self.init_logging_dict() 
         # Save  train_log_dataframe to file
-        self.train_log_dataframe.to_csv(self.train_folder + f"/Trainer_Data.csv")
+        train_log_dataframe.to_csv(df_path, sep=';')
+        del train_log_dataframe
         print('Data saved')
 
 if __name__ == "__main__":

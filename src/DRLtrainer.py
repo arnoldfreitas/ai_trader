@@ -82,7 +82,7 @@ class DRLTrainer():
         self.train_folder=os.path.abspath(os.path.join(self.data_path, 
                     time_str, algorithm))
         self.train_log_dict = self.init_logging_dict()
-        self.train_log_dataframe = pd.DataFrame(columns=self.log_cols)
+        # self.train_log_dataframe = pd.DataFrame(columns=self.log_cols)
 
         # Init env controllable params
         self.env._update_log_folder(os.path.abspath(os.path.join(self.train_folder, 'episodes')))
@@ -125,7 +125,7 @@ class DRLTrainer():
         for episode in range(1, n_episodes + 1):
             print("Episode: {}/{}".format(episode, n_episodes))
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
-                self.agent.update_epsilon(increase_epsilon=0.5)
+                self.agent.update_epsilon(increase_epsilon=0.1)
                 print(f'on Episode {episode} set Eplison to {self.agent.epsilon} to find global minimum')
             run_profit=0.0 # Init Profit on episode
             # Loop inside one episode over number runs 
@@ -282,13 +282,19 @@ class DRLTrainer():
         if save_model:
             self.agent.model.save(self.train_folder+"models_ai_trade_{}_{}.h5".format(time_str,episode))
         
+        df_path = self.train_folder + f"/Trainer_Data_{episode}.csv"
+        train_log_dataframe = pd.DataFrame(columns=self.log_cols)
+        if os.path.exists(df_path):
+            train_log_dataframe= pd.read_csv(df_path, sep=';')
+        
         # Save info from checkpoint to train_log_dataframe
         tmp = pd.DataFrame.from_dict(self.train_log_dict)
-        self.train_log_dataframe = pd.concat([self.train_log_dataframe, tmp])
+        train_log_dataframe = pd.concat([train_log_dataframe, tmp])
         # Reinit log dict to avoid double logging
         self.train_log_dict = self.init_logging_dict() 
         # Save  train_log_dataframe to file
-        self.train_log_dataframe.to_csv(self.train_folder + f"/Trainer_Data.csv")
+        train_log_dataframe.to_csv(df_path, sep=';')
+        del train_log_dataframe
         print('Data saved')
 
 if __name__ == "__main__":

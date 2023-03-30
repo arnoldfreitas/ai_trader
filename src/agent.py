@@ -254,3 +254,7 @@ class Trader_Agent():
             self.epsilon+=increase_epsilon
         elif self.epsilon > self.epsilon_final:
             self.epsilon *= self.epsilon_decay
+        else:
+            self.epsilon = self.epsilon_final
+
+        self.epsilon = min([self.epsilon, 1.0])

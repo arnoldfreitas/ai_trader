@@ -22,6 +22,16 @@ from collections import deque
 import h5py
 from itertools import product
 
+def enable_memory_growth():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    print(f"GPUS: {gpus}")
+    if gpus:
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except RuntimeError as e:
+            print(e)
+
 def conduct_traning(param_combination, i):
     if param_combination.get('trainer') == 'DQNTrainer':
         action_space = 4
@@ -80,8 +90,7 @@ def conduct_traning(param_combination, i):
     return trainer.train_folder 
 
 if __name__=='__main__':
-    physical_devices = tf.config.list_physical_devices('GPU')
-    tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
+    enable_memory_growth()
 
     training_folders = []
 
@@ -108,13 +117,13 @@ if __name__=='__main__':
 
         'epsilon': [0.7],
         'epsilon_final':[0.01],
-        'epsilon_decay':[0.995],
+        'epsilon_decay':[0.75],
         }
 
 
     keys, values = zip(*hpo_params.items())
     hpo_list = [dict(zip(keys, v)) for v in product(*values)]
-    pprint.pprint(hpo_list)
+    # pprint.pprint(hpo_list)
     
     # for i , params in enumerate(hpo_params):
 
@@ -128,7 +137,7 @@ if __name__=='__main__':
                 'episodes': 50,
                 'epoch': 5,
                 'epsilon': 0.7,
-                'epsilon_decay': 0.995,
+                'epsilon_decay': 0.75,
                 'epsilon_final': 0.01,
                 'fee': 0.001,
                 'gamma': 0.95,
