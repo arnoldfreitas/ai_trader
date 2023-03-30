@@ -23,14 +23,20 @@ import h5py
 from itertools import product
 
 def enable_memory_growth():
-    gpus = tf.config.experimental.list_physical_devices('GPU')
+    gpus = tf.config.list_physical_devices('GPU')
     print(f"GPUS: {gpus}")
     if gpus:
+        # Restrict TensorFlow to only allocate 3GB of memory on the first GPU
         try:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
+            tf.config.set_logical_device_configuration(
+                gpus[0],
+                [tf.config.LogicalDeviceConfiguration(memory_limit=3072)])
+            logical_gpus = tf.config.list_logical_devices('GPU')
+            print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
         except RuntimeError as e:
+            # Virtual devices must be set before GPUs have been initialized
             print(e)
+
 
 def conduct_traning(param_combination, i):
     if param_combination.get('trainer') == 'DQNTrainer':
