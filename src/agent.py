@@ -6,9 +6,9 @@ from typing import Tuple, Union, List
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-tf.compat.v1.disable_eager_execution()
-import gc
 from tensorflow import keras
+# tf.compat.v1.disable_eager_execution()
+import gc
 from typing import Tuple
 from env import BTCMarket_Env
 
@@ -191,7 +191,7 @@ class Trader_Agent():
         #TODO: Build RNN (LSTM) as policy network
         self.model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
         self.model.summary()
-        print(f"Model Loss: {self.model.compiled_loss._losses}")
+        # print(f"Model Loss: {self.model.compiled_loss._losses}")
         
         # self.model = model
 
@@ -246,10 +246,12 @@ class Trader_Agent():
       
         # action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size*self.window_size)),verbose = 0)
         state_input = tf.convert_to_tensor(state, dtype=tf.float32)
-        action_val = self.model.predict(state_input,verbose = 0)[0]
-        
+        # print(tf.shape(state_input))
+        # action_val = self.model.predict(state_input,verbose = 0,steps=1)[0]
+        action_val = self.model(state_input, training=False)
+        action_val = action_val.numpy()[0]
         gc.collect()
-        keras.backend.clear_session()
+        # keras.backend.clear_session()
 
         # round computed value to one decimal point
         # leaving decision about rounding for trainer

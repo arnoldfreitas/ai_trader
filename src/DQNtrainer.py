@@ -8,8 +8,9 @@ import time
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-tf.compat.v1.disable_eager_execution()
 from tensorflow import keras
+# tf.compat.v1.disable_eager_execution()
+import gc
 from tqdm import tqdm_notebook, tqdm
 from matplotlib import pyplot as plt
 
@@ -21,7 +22,7 @@ class CustomCallback(keras.callbacks.Callback):
     def on_epoch_end(self, epoch: int, logs=None):
         # Housekeeping
         gc.collect()
-        keras.clear_session()
+        keras.backend.clear_session()
 
 
 class DQNTrainer():
@@ -79,7 +80,7 @@ class DQNTrainer():
         # self.agent.build_model() # INIT MODEL 
         self.agent.build_model_LSTM(learning_rate=learning_rate,
                                     lstm_path=lstm_path) 
-        
+        tf.compat.v1.get_default_graph().finalize()
 
     def rollout(self, n_episodes, run_per_episode):
         """
@@ -165,6 +166,11 @@ class DQNTrainer():
                         # Log Checkpoint Info to Screen
                         print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
                 
+                self.save_data(episode,train_data,save_model=True)
+                
+                keras.backend.clear_session()
+                # tf.reset_default_graph()
+                gc.collect()
                 # Log Run Info to Screen
                 print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
             
@@ -242,7 +248,10 @@ class DQNTrainer():
 
         # init state, action, reward for training
         state, _, reward, next_state , done = batch[0]
-        action = self.agent.model.predict(state,verbose = 0)
+        state_input = tf.convert_to_tensor(state, dtype=tf.float32)
+        # action = self.agent.model.predict(state_input,verbose = 0,steps=1)
+        action = self.agent.model(state_input, training=False)
+        action = action.numpy()
         for index in range(1,len(batch)):
             # Unused code for keeping track of the past
             # state = tf.reshape(tf.convert_to_tensor(state,dtype=np.float32),
@@ -257,7 +266,9 @@ class DQNTrainer():
             # Compute Reward Decay for DQN
             
             state_input = tf.convert_to_tensor(next_state, dtype=tf.float32)
-            action_next = self.agent.model.predict(state_input,verbose = 0)
+            # action_next = self.agent.model.predict(state_input,verbose = 0,steps=1)
+            action_next = self.agent.model(state_input, training=False)
+            action_next = action_next.numpy()
             if not done:
                 reward += self.gamma * np.max(action_next)
 
@@ -275,12 +286,13 @@ class DQNTrainer():
 
         # Batch Train
         
-        x_train = tf.convert_to_tensor(x_train, dtype=tf.float32)
-        y_train = tf.convert_to_tensor(y_train, dtype=tf.float32)
+        # x_train = tf.convert_to_tensor(x_train, dtype=tf.float32)
+        # y_train = tf.convert_to_tensor(y_train, dtype=tf.float32)
+        gc.collect()
         result=self.agent.model.fit(x_train, y_train, 
                 epochs=self.epoch, 
-                verbose=0,
-                callbacks=[CustomCallback()])
+                verbose=0,)
+                # callbacks=[CustomCallback()])
         self.agent.update_epsilon()
         return result
 

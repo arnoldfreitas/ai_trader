@@ -9,9 +9,11 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
+# tf.compat.v1.disable_eager_execution()
 from tqdm import tqdm_notebook, tqdm
 from matplotlib import pyplot as plt
 import pprint
+import gc
 
 sys.path.append('../src/')
 from env import BTCMarket_Env
@@ -142,7 +144,7 @@ if __name__=='__main__':
                 'data_source': 'BTC_histData_dt1800.0s_20220825_0629',
                 'episodes': 50,
                 'epoch': 5,
-                'epsilon': 0.7,
+                'epsilon': 0.5,
                 'epsilon_decay': 0.75,
                 'epsilon_final': 0.01,
                 'fee': 0.001,
@@ -152,7 +154,7 @@ if __name__=='__main__':
                 'obs_space': (8, 20),
                 'reward_function': 'compute_reward_from_tutor',
                 'runs_p_eps': 5,
-                'trainer': 'DQNTrainer'
+                'DQNTrainer': 'DRLTrainer' # DRLTrainer DQNTrainer
                 }
 
     train_folder = conduct_traning(params, i)

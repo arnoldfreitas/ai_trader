@@ -7,10 +7,9 @@ import random
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-# physical_devices = tf.config.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 from tensorflow import keras
-tf.compat.v1.disable_eager_execution()
+# tf.compat.v1.disable_eager_execution()
+import gc
 from tqdm import tqdm_notebook, tqdm
 from matplotlib import pyplot as plt
 import time
@@ -40,7 +39,7 @@ class CustomCallback(keras.callbacks.Callback):
     def on_epoch_end(self, epoch: int, logs=None):
         # Housekeeping
         gc.collect()
-        keras.clear_session()
+        keras.backend.clear_session()
 
 class DRLTrainer():
     '''
@@ -102,6 +101,8 @@ class DRLTrainer():
         self.agent.build_model_LSTM(learning_rate=learning_rate,
                                loss_function=custom_loss,
                                lstm_path=lstm_path) 
+        tf.compat.v1.get_default_graph().finalize()
+
         
 
     def rollout(self, n_episodes, run_per_episode):
@@ -190,6 +191,10 @@ class DRLTrainer():
                         print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
                 
                 self.save_data(episode,train_data,save_model=True)
+                
+                keras.backend.clear_session()
+                # tf.reset_default_graph()
+                gc.collect()
                 # Log Run Info to Screen
                 print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
             
@@ -265,12 +270,12 @@ class DRLTrainer():
         # y_target = self.loss_shift - y_target
         # Batch Train (in this case on-line traing without batches) 
         # we can just set the batch to 1 and it will do online training
-        x_train = tf.convert_to_tensor(x_train, dtype=tf.float32)
-        y_target = tf.convert_to_tensor(y_target, dtype=tf.float32)
+        # x_train = tf.convert_to_tensor(x_train, dtype=tf.float32)
+        # y_target = tf.convert_to_tensor(y_target, dtype=tf.float32)
         result=self.agent.model.fit(x_train, y_target, 
                 epochs=self.epoch, 
-                verbose=0,
-                callbacks=[CustomCallback()])
+                verbose=0,)
+                # callbacks=[CustomCallback()])
 
         self.agent.update_epsilon()
         return result
