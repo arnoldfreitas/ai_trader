@@ -191,7 +191,7 @@ class Trader_Agent():
         #TODO: Build RNN (LSTM) as policy network
         self.model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
         self.model.summary()
-        print(f"Model Loss: {model.compiled_loss._losses}")
+        print(f"Model Loss: {self.model.compiled_loss._losses}")
         
         # self.model = model
 
