@@ -8,6 +8,7 @@ import time
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
 from tensorflow import keras
 from tqdm import tqdm_notebook, tqdm
 from matplotlib import pyplot as plt
@@ -15,6 +16,12 @@ from matplotlib import pyplot as plt
 from env import BTCMarket_Env
 from agent import Trader_Agent
 from collections import deque
+
+class CustomCallback(keras.callbacks.Callback):
+    def on_epoch_end(self, epoch: int, logs=None):
+        # Housekeeping
+        gc.collect()
+        keras.clear_session()
 
 
 class DQNTrainer():
@@ -248,7 +255,9 @@ class DQNTrainer():
                 raise ValueError("nan value found")
 
             # Compute Reward Decay for DQN
-            action_next = self.agent.model.predict(next_state,verbose = 0)
+            
+            state_input = tf.convert_to_tensor(next_state, dtype=tf.float32)
+            action_next = self.agent.model.predict(state_input,verbose = 0)
             if not done:
                 reward += self.gamma * np.max(action_next)
 
@@ -265,8 +274,13 @@ class DQNTrainer():
             action = action_next
 
         # Batch Train
+        
+        x_train = tf.convert_to_tensor(x_train, dtype=tf.float32)
+        y_train = tf.convert_to_tensor(y_train, dtype=tf.float32)
         result=self.agent.model.fit(x_train, y_train, 
-                epochs=self.epoch, verbose=0)
+                epochs=self.epoch, 
+                verbose=0,
+                callbacks=[CustomCallback()])
         self.agent.update_epsilon()
         return result
 

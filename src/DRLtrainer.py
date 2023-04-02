@@ -10,6 +10,7 @@ import tensorflow as tf
 # physical_devices = tf.config.list_physical_devices('GPU')
 # tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 from tensorflow import keras
+tf.compat.v1.disable_eager_execution()
 from tqdm import tqdm_notebook, tqdm
 from matplotlib import pyplot as plt
 import time
@@ -34,6 +35,12 @@ class DRLLossFunctions(keras.losses.Loss):
         tmp = tf.abs(tf.reduce_mean(y_true + (0*y_pred)))
         loss = tf.math.scalar_mul(-1, tmp, name=None)
         return loss
+
+class CustomCallback(keras.callbacks.Callback):
+    def on_epoch_end(self, epoch: int, logs=None):
+        # Housekeeping
+        gc.collect()
+        keras.clear_session()
 
 class DRLTrainer():
     '''
@@ -258,8 +265,12 @@ class DRLTrainer():
         # y_target = self.loss_shift - y_target
         # Batch Train (in this case on-line traing without batches) 
         # we can just set the batch to 1 and it will do online training
-        result=self.agent.model.fit(x_train, y_target,
-                epochs=self.epoch, verbose=0)
+        x_train = tf.convert_to_tensor(x_train, dtype=tf.float32)
+        y_target = tf.convert_to_tensor(y_target, dtype=tf.float32)
+        result=self.agent.model.fit(x_train, y_target, 
+                epochs=self.epoch, 
+                verbose=0,
+                callbacks=[CustomCallback()])
 
         self.agent.update_epsilon()
         return result

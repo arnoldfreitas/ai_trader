@@ -6,6 +6,8 @@ from typing import Tuple, Union, List
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+tf.compat.v1.disable_eager_execution()
+import gc
 from tensorflow import keras
 from typing import Tuple
 from env import BTCMarket_Env
@@ -185,13 +187,13 @@ class Trader_Agent():
         dense_2 = keras.layers.Dense(units=128, activation='relu')(dense_1)
         dense_3 = keras.layers.Dense(units=64, activation='relu')(dense_2)
         output = keras.layers.Dense(units=self.action_space, activation=layer_output)(dense_3)
-        model = keras.Model(input_layer, output)
+        self.model = keras.Model(input_layer, output)
         #TODO: Build RNN (LSTM) as policy network
-        model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
-        model.summary()
+        self.model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
+        self.model.summary()
         print(f"Model Loss: {model.compiled_loss._losses}")
         
-        self.model = model
+        # self.model = model
 
         # self.lstm_model = keras.Model(input_layer, lstm_layer)
         # self.lstm_model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
@@ -243,7 +245,11 @@ class Trader_Agent():
             return np.array(action)
       
         # action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size*self.window_size)),verbose = 0)
-        action_val = self.model.predict(state,verbose = 0)[0]
+        state_input = tf.convert_to_tensor(state, dtype=tf.float32)
+        action_val = self.model.predict(state_input,verbose = 0)[0]
+        
+        gc.collect()
+        keras.backend.clear_session()
 
         # round computed value to one decimal point
         # leaving decision about rounding for trainer

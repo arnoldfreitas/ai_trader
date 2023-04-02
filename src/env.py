@@ -5,8 +5,8 @@ import math
 import os
 from datetime import datetime
 from sklearn.preprocessing import MinMaxScaler
-import tensorflow as tf
-from tensorflow import keras
+# import tensorflow as tf
+# from tensorflow import keras
 from typing import Tuple, List
 
 class BTCMarket_Env():
