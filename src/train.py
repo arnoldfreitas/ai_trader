@@ -42,10 +42,10 @@ def enable_memory_growth():
 
 def conduct_traning(param_combination, i):
     if param_combination.get('trainer') == 'DQNTrainer':
-        action_space = 4
+        # action_space = 4
         algorithm = f'DQN_trial_{i}'
     else:
-        action_space = 1
+        # action_space = 1
         algorithm = f'DRL_trial_{i}'
 
     if param_combination.get('asset') == 'BTC':
@@ -54,7 +54,7 @@ def conduct_traning(param_combination, i):
         param_combination["data_source"] = data_source_perp
 
 
-    param_combination['action_space'] = action_space
+    action_space = param_combination.get('action_space')
     param_combination['algorithm'] = algorithm
     pprint.pprint(param_combination)
 
@@ -137,7 +137,6 @@ if __name__=='__main__':
 
     i = 0
     params = {'action_domain': (0.0, 1.0),
-                'action_space': 4,
                 'algorithm': 'DRL_trial_0',
                 'asset': 'BTC',
                 'batch_size': 1,
@@ -154,7 +153,8 @@ if __name__=='__main__':
                 'obs_space': (8, 20),
                 'reward_function': 'compute_reward_from_tutor',
                 'runs_p_eps': 5,
-                'DQNTrainer': 'DRLTrainer' # DRLTrainer DQNTrainer
+                'action_space': 1,
+                'trainer': 'DRLTrainer' # DRLTrainer DQNTrainer
                 }
 
     train_folder = conduct_traning(params, i)
