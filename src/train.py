@@ -138,7 +138,7 @@ if __name__=='__main__':
     i = 0
     params = {'action_domain': (0.0, 1.0),
                 'action_space': 4,
-                'algorithm': 'DQN_trial_0',
+                'algorithm': 'DRL_trial_0',
                 'asset': 'BTC',
                 'batch_size': 1,
                 'data_source': 'BTC_histData_dt1800.0s_20220825_0629',

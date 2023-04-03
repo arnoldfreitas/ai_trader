@@ -165,21 +165,25 @@ class DQNTrainer():
                         self.save_data(episode,train_data,save_model=False)
                         # Log Checkpoint Info to Screen
                         print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
+                    # End Loop over one episode run
                 
-                self.save_data(episode,train_data,save_model=True)
+                self.save_data(episode,train_data,save_model=False)
                 
                 keras.backend.clear_session()
                 # tf.reset_default_graph()
                 gc.collect()
                 # Log Run Info to Screen
                 print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
-            
-            self.save_data(episode,train_data,save_model=True)
+                # End Loop over all runs 
+
+            # self.save_data(episode,train_data,save_model=True)
             # Log Episode Info to Screen
             total_profit+=run_profit
             print(f'episode {episode}/{n_episodes}. Profit {total_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
 
             self.save_data(episode,train_data,save_model=True)
+
+        # End Loop over episodes
 
     def init_logging_dict(self) -> dict:
         self.log_cols=['episode', 'run', 'action', 'state', 
