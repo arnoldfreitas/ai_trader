@@ -197,8 +197,10 @@ class Trader_Agent():
 
         # self.lstm_model = keras.Model(input_layer, lstm_layer)
         # self.lstm_model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
-    
-    def load_model(self, model_path: str):
+
+    def load_model(self, model_path: str, 
+                         learning_rate=1e-3, 
+                         loss_function='mse',):
         """
         Load TensorFlow Model from h5 file. 
 
@@ -211,20 +213,10 @@ class Trader_Agent():
         -------
             Tensorflow Model 
         """
-        epi_list=[]
-        date_list=[] 
-        for file in os.listdir(self.data_path+"/Bot/models"):
-            if '.h5' in file:
-                date_list.append(file.split('.')[0].split('_')[2])
-                epi_list.append(int(file.split('.')[0].split('_')[3]))
-        load_epi=max(epi_list)
-        load_date=date_list[epi_list.index(load_epi)] 
-        model = keras.models.load_model(
-                self.data_path+"/Bot/models/ai_trade_{}_{}.h5".format(load_date,load_epi))
-
-        print("model: ai_trade_{}_{} loaded. Eplison set to {}.".format(
-                load_date,load_epi,self.epsilon))
-        self.model = model
+        
+        self.model = keras.models.load_model(model_path, compile=False)
+        self.model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
+        self.model.summary()
 
     def compute_action(self, state: np.ndarray) ->  float:
         """

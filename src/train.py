@@ -54,10 +54,10 @@ def conduct_traning(param_combination, i):
         param_combination["data_source"] = data_source_perp
 
 
+    checkpoint = param_combination.get('from_checkpoint', None)
     action_space = param_combination.get('action_space')
     param_combination['algorithm'] = algorithm
     pprint.pprint(param_combination)
-
     env = BTCMarket_Env(observation_space = param_combination.get('obs_space', (8,20)),
             action_space = action_space,
             start_money = param_combination.get('money', 10000),
@@ -85,8 +85,9 @@ def conduct_traning(param_combination, i):
                 learning_rate=param_combination.get('learning_rate', 1e-3),
                 algorithm=algorithm,
                 lstm_path="./../notebooks/best_models/11_mar_2023/best_model_sequential_20back_10ahead.h5",
-                # best_model_sequential_20back_10ahead lstm_2,
+                from_checkpoint = checkpoint,
                            )
+                # best_model_sequential_20back_10ahead lstm_2,
 
     os.makedirs(trainer.train_folder,exist_ok=True)
     with open(f'{trainer.train_folder}/params.json', 'w') as fp:
@@ -133,8 +134,11 @@ if __name__=='__main__':
     hpo_list = [dict(zip(keys, v)) for v in product(*values)]
     # pprint.pprint(hpo_list)
     
-    # for i , params in enumerate(hpo_params):
+    # from_checkpoint = {'train_path': '/home/jovyan/ai_trader/data/20230403_190725/DRL_trial_0',
+    #                     'init_episode': 35,
+    #                     'load_model': '/home/jovyan/ai_trader/data/20230403_190725/DRL_trial_0models_ai_trade_20230404_072932_30.h5'}
 
+    # for i , params in enumerate(hpo_params):
     i = 0
     params = {'action_domain': (0.0, 1.0),
                 'algorithm': 'DRL_trial_0',
@@ -154,13 +158,13 @@ if __name__=='__main__':
                 'reward_function': 'compute_reward_from_tutor',
                 'runs_p_eps': 5,
                 'action_space': 1,
-                'trainer': 'DRLTrainer' # DRLTrainer DQNTrainer
+                'trainer': 'DRLTrainer', # DRLTrainer DQNTrainer
+                'from_checkpoint': None # None from_checkpoint
                 }
 
     train_folder = conduct_traning(params, i)
 
     # Plot profit  
-    # train_folder = './../data/20230328_175512/DQN_trial_0/'
     print(len(hpo_list))
     training_folders.append(train_folder)
     df = pd.read_csv(f'{train_folder}/Trainer_Data.csv')

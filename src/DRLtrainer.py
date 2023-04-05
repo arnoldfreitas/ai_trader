@@ -58,6 +58,7 @@ class DRLTrainer():
                 learning_rate: float =1e-3,
                 algorithm: str = 'DRL',
                 lstm_path: str = None,
+                from_checkpoint: dict = None,
                 data_path: str ='./../data',) -> None:
         """
         Receive arguments and initialise the  class params.
@@ -83,12 +84,19 @@ class DRLTrainer():
         self.y_train_shape = (self.batch_size, action_space)
         self.epoch = epoch
         self.gamma = gamma # Decay Constant for DQN
-
+        self.init_episode = 1
 
         # Logging params
+        load_model = None
         time_str=datetime.now().strftime('%Y%m%d_%H%M%S')
         self.train_folder=os.path.abspath(os.path.join(self.data_path, 
-                    time_str, algorithm))
+                time_str, algorithm))
+        if isinstance(from_checkpoint, dict):
+            if ('train_path' in from_checkpoint.keys()):
+                self.train_folder=from_checkpoint['train_path']
+                self.init_episode = from_checkpoint.get('init_episode', 1)
+                load_model = from_checkpoint.get('load_model', None)
+        
         self.train_log_dict = self.init_logging_dict()
         # self.train_log_dataframe = pd.DataFrame(columns=self.log_cols)
 
@@ -100,9 +108,15 @@ class DRLTrainer():
         custom_loss = DRLLossFunctions()
         # self.agent.build_model(learning_rate=learning_rate,
         #                        loss_function=custom_loss) 
-        self.agent.build_model_LSTM(learning_rate=learning_rate,
+        if isinstance(load_model, str) and os.path.exists(load_model):
+            self.agent.load_model(load_model, 
+                                learning_rate=learning_rate,
+                               loss_function=custom_loss,) 
+        else:
+            self.agent.build_model_LSTM(learning_rate=learning_rate,
                                loss_function=custom_loss,
                                lstm_path=lstm_path) 
+
         tf.compat.v1.get_default_graph().finalize()
 
         
@@ -132,7 +146,7 @@ class DRLTrainer():
         start_time = time.time()
         # Loop over every episode
         # for episode in range(1):
-        for episode in range(1, n_episodes + 1):
+        for episode in range(self.init_episode, n_episodes + 1):
             print("Episode: {}/{}".format(episode, n_episodes))
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
                 self.agent.update_epsilon(increase_epsilon=0.1)
