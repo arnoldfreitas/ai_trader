@@ -18,6 +18,9 @@ from env import BTCMarket_Env
 from agent import Trader_Agent
 from collections import deque
 
+np.random.seed(42)
+random.seed(42)
+
 class DRLLossFunctions(keras.losses.Loss):
     def __init__(self):
         super().__init__()
@@ -29,12 +32,16 @@ class DRLLossFunctions(keras.losses.Loss):
 
         Loss should is defined as the negative of the reward,
         in order to maximize the objective function, thus performing gradient ascent.
+        y_true := rewards
+        y_pred := actions
+        # TODO: Implement such that if y_true < 1 than does not multiply loss by 1.
+        Else: multiply loss by 1
         '''
-        # loss = -1 * tf.keras.losses.MSE(y_true, 0*y_pred)
-        # tmp = tf.abs(tf.reduce_mean(y_true + (0*y_pred)))
-        # loss = tf.math.scalar_mul(-1, tmp, name=None)
-        tmp = tf.abs(tf.reduce_mean(y_true*y_pred))
-        loss = tf.math.scalar_mul(-1, tmp, name=None)
+        loss = tf.abs(tf.reduce_mean(
+            tf.math.sign(y_true)*y_pred*tf.math.log1p(y_true)))
+        # loss = tf.abs(tf.reduce_mean(y_pred*tf.math.log1p(y_true)))
+        # loss = tf.abs(tf.reduce_mean(y_true*y_pred))
+        loss = tf.math.scalar_mul(-1, loss, name=None)
         return loss
 
 class CustomCallback(keras.callbacks.Callback):
@@ -106,6 +113,7 @@ class DRLTrainer():
         # Init agent controllable params and init model
         self.loss_shift = 1.0
         custom_loss = DRLLossFunctions()
+        # custom_loss = "MSE"
         # self.agent.build_model(learning_rate=learning_rate,
         #                        loss_function=custom_loss) 
         if isinstance(load_model, str) and os.path.exists(load_model):
@@ -144,13 +152,15 @@ class DRLTrainer():
         train_cnt = 0
         total_profit = 0
         start_time = time.time()
+        tmp_action = []
         # Loop over every episode
         # for episode in range(1):
         for episode in range(self.init_episode, n_episodes + 1):
             print("Episode: {}/{}".format(episode, n_episodes))
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
-                self.agent.update_epsilon(increase_epsilon=0.1)
+                self.agent.update_epsilon(increase_epsilon=0.5)
                 print(f'on Episode {episode} set Eplison to {self.agent.epsilon} to find global minimum')
+            self.env.reset(resample_data=True)
             run_profit=0.0 # Init Profit on episode
             # Loop inside one episode over number runs 
             # for run in range(1):
@@ -158,11 +168,11 @@ class DRLTrainer():
                 print("Episode: {}/{} || Run {}/{}".format(episode, 
                             n_episodes,run,run_per_episode))
                 if run % 5 == 0: # Increase epsilon every 5 runs
-                    self.agent.update_epsilon(increase_epsilon=0.5 -(run/run_per_episode)*0) # *0 why?
+                    self.agent.update_epsilon(increase_epsilon=0.25 -(run/run_per_episode)*0) # *0 why?
                     print(f'on Run {run} set Eplison to {self.agent.epsilon} to find global minimum')
                 train_data={}
                 run_profit = 0.0
-                self.env.reset()
+                self.env.reset(resample_data=False)
                 data_samples = self.env.episode_length
                 state, _, _ = self.env.step(np.array([0]))
                 for t in tqdm(range(data_samples)):
@@ -170,6 +180,7 @@ class DRLTrainer():
                     # Compute Action
                     tmp_wallet_value = self.env.wallet_value[0]
                     action = self.agent.compute_action(state)
+                    tmp_action.append(action)
                     # round action to one decimal point (that we dont take to small actions)
                     rounded_action = np.round(action, 1) ####### we also round the action in the step() function, just leave both for extra safety.
                     # Compute new step
@@ -223,6 +234,7 @@ class DRLTrainer():
             self.save_data(episode,train_data,save_model=True)
 
         # End Loop over episodes
+        return tmp_action
 
     def init_logging_dict(self) -> dict:
         self.log_cols=['episode', 'run', 'action', 'state', 
@@ -230,20 +242,22 @@ class DRLTrainer():
         tmp =  { key : [] for key in self.log_cols }
         return tmp
  
-    def log_training(self, episode, run, action, state, reward, done, 
-                epsilon, profit, time_elapsed):
+    def log_training(self, episode_log, run_log, 
+                action_log, state_log, reward_log, 
+                done_log, epsilon_log, profit_log, 
+                time_elapsed_log):
         """
         Add params to log dict
         """
-        self.train_log_dict['episode'].append(episode)
-        self.train_log_dict['run'].append(run)
-        self.train_log_dict['action'].append(action)
-        self.train_log_dict['state'].append(state)
-        self.train_log_dict['reward'].append(reward)
-        self.train_log_dict['done'].append(done)
-        self.train_log_dict['epsilon'].append(epsilon)
-        self.train_log_dict['profit'].append(profit)
-        self.train_log_dict['time_elapsed'].append(time_elapsed)
+        self.train_log_dict['episode'].append(episode_log)
+        self.train_log_dict['run'].append(run_log)
+        self.train_log_dict['action'].append(action_log)
+        self.train_log_dict['state'].append(state_log)
+        self.train_log_dict['reward'].append(reward_log)
+        self.train_log_dict['done'].append(done_log)
+        self.train_log_dict['epsilon'].append(epsilon_log)
+        self.train_log_dict['profit'].append(profit_log)
+        self.train_log_dict['time_elapsed'].append(time_elapsed_log)
 
     def batch_train(self):
         """
@@ -329,11 +343,13 @@ class DRLTrainer():
         # Reinit log dict to avoid double logging
         self.train_log_dict = self.init_logging_dict() 
         # Save  train_log_dataframe to file
-        train_log_dataframe.to_csv(df_path, sep=';')
+        train_log_dataframe.to_csv(df_path, sep=';', index=False)
         del train_log_dataframe
         print('Data saved')
 
 if __name__ == "__main__":
+    np.random.seed(42)
+    random.seed(42)
     obs_space = (8,20)
     act_space = 1
     action_domain = (-1.0,1.0) # (0.0, 1.0)

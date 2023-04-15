@@ -12,6 +12,10 @@ import gc
 from typing import Tuple
 from env import BTCMarket_Env
 
+np.random.seed(42)
+random.seed(42)
+
+
 class Trader_Agent():
     '''
     Trader class.
@@ -84,7 +88,9 @@ class Trader_Agent():
         # else:
         #     self.build_model()
 
-    def build_model(self, learning_rate=1e-3, loss_function='mse'):
+    def build_model(self, learning_rate=1e-3, 
+                        loss_function='mse',
+                        use_softmax=False,):
         """
         Build Policy model with predefined architecture.
 
@@ -118,15 +124,25 @@ class Trader_Agent():
             # for BTC: "sigmoid"; action_domain in (0, 1)
             layer_output = 'sigmoid'
 
-        model = keras.models.Sequential([
-            keras.layers.InputLayer(input_shape=(self.window_size,self.state_size)),
-            keras.layers.Flatten(),
-            keras.layers.Dense(units=256, activation='relu'),
-            keras.layers.Dense(units=128, activation='relu'),
-            keras.layers.Dense(units=64, activation='relu'),
-            keras.layers.Dense(units=self.action_space, activation=layer_output)
-            ])
-
+        if use_softmax:
+            model = keras.models.Sequential([
+                keras.layers.InputLayer(input_shape=(self.window_size,self.state_size)),
+                keras.layers.Flatten(),
+                keras.layers.Dense(units=256, activation='relu'),
+                keras.layers.Dense(units=128, activation='relu'),
+                keras.layers.Dense(units=64, activation='relu'),
+                keras.layers.Dense(units=self.action_space, activation=layer_output),
+                keras.layers.Softmax()
+                ])
+        else:
+            model = keras.models.Sequential([
+                keras.layers.InputLayer(input_shape=(self.window_size,self.state_size)),
+                keras.layers.Flatten(),
+                keras.layers.Dense(units=256, activation='relu'),
+                keras.layers.Dense(units=128, activation='relu'),
+                keras.layers.Dense(units=64, activation='relu'),
+                keras.layers.Dense(units=self.action_space, activation=layer_output)
+                ])
         #TODO: Build RNN (LSTM) as policy network
         model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
         model.summary()
@@ -136,7 +152,8 @@ class Trader_Agent():
     
     def build_model_LSTM(self, learning_rate=1e-3, 
                          loss_function='mse',
-                         lstm_path=None):
+                         lstm_path=None,
+                         use_softmax=False,):
         """
         Build Policy model with predefined architecture.
 
@@ -183,10 +200,12 @@ class Trader_Agent():
                             tf.reshape(lstm_outputs, 
                             shape=(-1, 10))])
                             # shape=(-1, 5))])
-        dense_1 = keras.layers.Dense(units=256, activation='relu')(dense_inputs)
-        dense_2 = keras.layers.Dense(units=128, activation='relu')(dense_1)
-        dense_3 = keras.layers.Dense(units=64, activation='relu')(dense_2)
+        dense_1 = keras.layers.Dense(units=256, activation='linear')(dense_inputs)
+        dense_2 = keras.layers.Dense(units=128, activation='linear')(dense_1)
+        dense_3 = keras.layers.Dense(units=64, activation='linear')(dense_2)
         output = keras.layers.Dense(units=self.action_space, activation=layer_output)(dense_3)
+        if use_softmax:
+            output = keras.layers.Softmax()(output)
         self.model = keras.Model(input_layer, output)
         #TODO: Build RNN (LSTM) as policy network
         self.model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))

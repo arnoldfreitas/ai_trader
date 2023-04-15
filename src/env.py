@@ -9,6 +9,9 @@ from sklearn.preprocessing import MinMaxScaler
 # from tensorflow import keras
 from typing import Tuple, List
 
+np.random.seed(42)
+random.seed(42)
+
 class BTCMarket_Env():
     '''
     Environment Class.
@@ -81,7 +84,7 @@ class BTCMarket_Env():
     def _update_log_folder(self, new_log_folder):
         self.log_folder=os.path.abspath(new_log_folder)
 
-    def reset(self) -> None:
+    def reset(self, resample_data=True) -> None:
         """
         Restart/Start episodes 
         Parameters
@@ -95,7 +98,8 @@ class BTCMarket_Env():
         # Init internal Episode Params
         self.ep_timestep: int = 0
         # Episode Data
-        self.ep_data = self.get_random_sample(self.data_source, period=self.ep_period)
+        if resample_data:
+            self.ep_data = self.get_random_sample(self.data_source, period=self.ep_period)
         self.episode_length: int = len(self.ep_data)-1 
         self.ep_count+=1
 
@@ -320,7 +324,7 @@ class BTCMarket_Env():
         os.makedirs(self.log_folder, exist_ok=True)
         
         df = pd.DataFrame.from_dict(self.log_dict)
-        df.to_csv(self.log_folder + f"/Epi_{episode}_run_{run}_{self.asset}.csv")
+        df.to_csv(self.log_folder + f"/Epi_{episode}_run_{run}_{self.asset}.csv", index=False, sep=";")
 
     def _handle_long_position(self,
             btc_wallet_variation:float, 
@@ -882,7 +886,7 @@ class BTCMarket_Env():
         return DSR
 
     def reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float,) -> float:
+                actual_price: float, trading_fee: float) -> float:
         """
         Function to compute Sterling Ratio.
 

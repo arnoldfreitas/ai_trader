@@ -24,6 +24,10 @@ from collections import deque
 import h5py
 from itertools import product
 
+np.random.seed(42)
+random.seed(42)
+
+
 def enable_memory_growth():
     gpus = tf.config.list_physical_devices('GPU')
     print(f"GPUS: {gpus}")
@@ -99,6 +103,8 @@ def conduct_traning(param_combination, i):
     return trainer.train_folder 
 
 if __name__=='__main__':
+    np.random.seed(42)
+    random.seed(42)
     enable_memory_growth()
 
     training_folders = []
@@ -133,15 +139,15 @@ if __name__=='__main__':
     keys, values = zip(*hpo_params.items())
     hpo_list = [dict(zip(keys, v)) for v in product(*values)]
     # pprint.pprint(hpo_list)
-    
-    # from_checkpoint = {'train_path': '/home/jovyan/ai_trader/data/20230403_190725/DRL_trial_0',
-    #                     'init_episode': 35,
-    #                     'load_model': '/home/jovyan/ai_trader/data/20230403_190725/DRL_trial_0models_ai_trade_20230404_072932_30.h5'}
+    from_checkpoint = None
+    # from_checkpoint = {'train_path': '/home/jovyan/ai_trader/data/20230410_171735/DQN_trial_5',
+    #                     'init_episode': 47,
+    #                     'load_model': '/home/jovyan/ai_trader/data/20230410_171735/DQN_trial_5models_ai_trade_20230411_124435_46.h5'}
 
     # for i , params in enumerate(hpo_params):
-    i = 0
+    i = 6
     params = {'action_domain': (0.0, 1.0),
-                'algorithm': 'DRL_trial_0',
+                'algorithm': 'DQN_trial_6',
                 'asset': 'BTC',
                 'batch_size': 1,
                 'data_source': 'BTC_histData_dt1800.0s_20220825_0629',
@@ -155,27 +161,27 @@ if __name__=='__main__':
                 'learning_rate': 0.001,
                 'money': 10000,
                 'obs_space': (8, 20),
-                'reward_function': 'compute_reward_from_tutor',
+                'reward_function': 'reward_sharpe_ratio',
                 'runs_p_eps': 5,
-                'action_space': 1,
-                'trainer': 'DRLTrainer', # DRLTrainer DQNTrainer
+                'action_space': 4,
+                'trainer': 'DQNTrainer', # DRLTrainer DQNTrainer
                 'from_checkpoint': None # None from_checkpoint
                 }
 
     train_folder = conduct_traning(params, i)
 
     # Plot profit  
-    print(len(hpo_list))
-    training_folders.append(train_folder)
-    df = pd.read_csv(f'{train_folder}/Trainer_Data.csv')
-    print(df.shape)
-    print(max(df.time_elapsed))
+    # print(len(hpo_list))
+    # training_folders.append(train_folder)
+    # df = pd.read_csv(f'{train_folder}/Trainer_Data.csv')
+    # print(df.shape)
+    # print(max(df.time_elapsed))
 
-    fig, ax = plt.subplots(2,1, figsize=(6,6))
-    ax[0].plot(df.profit)
-    ax[0].set_title("Profits")
-    y = [ast.literal_eval(x)[0] for x  in df.reward]
-    ax[1].plot(y)
-    ax[1].set_title("Rewards")
-    plt.show()
-    plt.savefig(f'{train_folder}/profit_rewards.png')
+    # fig, ax = plt.subplots(2,1, figsize=(6,6))
+    # ax[0].plot(df.profit)
+    # ax[0].set_title("Profits")
+    # y = [ast.literal_eval(x)[0] for x  in df.reward]
+    # ax[1].plot(y)
+    # ax[1].set_title("Rewards")
+    # plt.show()
+    # plt.savefig(f'{train_folder}/profit_rewards.png')

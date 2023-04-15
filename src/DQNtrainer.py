@@ -18,6 +18,9 @@ from env import BTCMarket_Env
 from agent import Trader_Agent
 from collections import deque
 
+np.random.seed(42)
+random.seed(42)
+
 class CustomCallback(keras.callbacks.Callback):
     def on_epoch_end(self, epoch: int, logs=None):
         # Housekeeping
@@ -89,10 +92,12 @@ class DQNTrainer():
         # self.agent.build_model() # INIT MODEL
         if isinstance(load_model, str) and os.path.exists(load_model):
             self.agent.load_model(load_model,
-                                learning_rate=learning_rate) 
+                                learning_rate=learning_rate,
+                                use_softmax=True,) 
         else:
             self.agent.build_model_LSTM(learning_rate=learning_rate,
-                                    lstm_path=lstm_path) 
+                                lstm_path=lstm_path,
+                                use_softmax=True,) 
         tf.compat.v1.get_default_graph().finalize()
 
     def rollout(self, n_episodes, run_per_episode):
@@ -125,6 +130,7 @@ class DQNTrainer():
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
                 self.agent.update_epsilon(increase_epsilon=0.5)
                 print(f'on Episode {episode} set Eplison to {self.agent.epsilon} to find global minimum')
+            self.env.reset(resample_data=True)
             run_profit = 0.0 # Init Profit on episode
             # Loop inside one episode over number runs 
             # for run in range(1):
@@ -132,11 +138,11 @@ class DQNTrainer():
                 print("Episode: {}/{} || Run {}/{}".format(episode, 
                             n_episodes,run,run_per_episode))
                 if run % 5 == 0: # Increase epsilon every 5 runs
-                    self.agent.update_epsilon(increase_epsilon=0.5 -(run/run_per_episode)*0)
+                    self.agent.update_epsilon(increase_epsilon=0.25 -(run/run_per_episode)*0)
                     print(f'on Run {run} set Eplison to {self.agent.epsilon} to find global minimum')
                 train_data={}
                 run_profit = 0.0
-                self.env.reset()
+                self.env.reset(resample_data=False)
                 data_samples = self.env.episode_length
                 state, _, _ = self.env.step(np.array([0]))
                 for t in tqdm(range(data_samples)):
@@ -342,11 +348,13 @@ class DQNTrainer():
         # Reinit log dict to avoid double logging
         self.train_log_dict = self.init_logging_dict() 
         # Save  train_log_dataframe to file
-        train_log_dataframe.to_csv(df_path, sep=';')
+        train_log_dataframe.to_csv(df_path, sep=';', index=False)
         del train_log_dataframe
         print('Data saved')
 
 if __name__ == "__main__":
+    np.random.seed(42)
+    random.seed(42)
     obs_space = (8,20)
     act_space = 4
 
