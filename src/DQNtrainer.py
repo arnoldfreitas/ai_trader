@@ -123,6 +123,8 @@ class DQNTrainer():
         train_cnt = 0
         total_profit = 0
         start_time = time.time()
+        # debug_action = []
+
         # Loop over every episode
         # for episode in range(1):
         for episode in range(self.init_episode, n_episodes + 1):
@@ -151,6 +153,7 @@ class DQNTrainer():
                     action = self.agent.compute_action(state)
                     # Transform Action from Policy to Env Requirement 
                     dqn_action = self.transform_to_dqn_action(action)
+                    # debug_action.append(dqn_action)
                     # Compute new step
                     next_state, reward, done = self.env.step(action=dqn_action)
                     # save Experience to Memory
@@ -183,7 +186,7 @@ class DQNTrainer():
                     if t >=100 and t % 100 == 0:
                         self.save_data(episode,train_data,save_model=False)
                         # Log Checkpoint Info to Screen
-                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
+                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
                     # End Loop over one episode run
                 
                 self.save_data(episode,train_data,save_model=False)
@@ -203,6 +206,7 @@ class DQNTrainer():
             self.save_data(episode,train_data,save_model=True)
 
         # End Loop over episodes
+        # return debug_action
 
     def init_logging_dict(self) -> dict:
         self.log_cols=['episode', 'run', 'action', 'state', 

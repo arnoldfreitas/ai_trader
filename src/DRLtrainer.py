@@ -28,19 +28,25 @@ class DRLLossFunctions(keras.losses.Loss):
 
     def call(self, y_true, y_pred):
         '''
-        Function to compute loss for gradient ascent.
-
-        Loss should is defined as the negative of the reward,
-        in order to maximize the objective function, thus performing gradient ascent.
+        Function to compute loss for gradient ascent in DRL Algorithm.
+        
+        Notes
+        -----
+        Function generates very high gradients, therefore we should use low learning rates
+        
+        Parameters
+        ----------
         y_true := rewards
         y_pred := actions
-        # TODO: Implement such that if y_true < 1 than does not multiply loss by 1.
-        Else: multiply loss by 1
         '''
-        loss = tf.abs(tf.reduce_mean(
-            tf.math.sign(y_true)*y_pred*tf.math.log1p(y_true)))
-        # loss = tf.abs(tf.reduce_mean(y_pred*tf.math.log1p(y_true)))
-        # loss = tf.abs(tf.reduce_mean(y_true*y_pred))
+        # METHOD 0
+        loss = tf.reduce_mean(y_true*y_pred)
+        # METHOD 1
+        # loss = tf.reduce_mean(y_pred*tf.math.log1p(y_true))
+        # METHOD 2
+        # loss = tf.reduce_mean(
+        #     tf.math.sign(y_true)*y_pred*tf.math.log1p(y_true))
+        # With or without
         loss = tf.math.scalar_mul(-1, loss, name=None)
         return loss
 
@@ -152,9 +158,8 @@ class DRLTrainer():
         train_cnt = 0
         total_profit = 0
         start_time = time.time()
-        tmp_action = []
+        # debug_action = []
         # Loop over every episode
-        # for episode in range(1):
         for episode in range(self.init_episode, n_episodes + 1):
             print("Episode: {}/{}".format(episode, n_episodes))
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
@@ -163,7 +168,6 @@ class DRLTrainer():
             self.env.reset(resample_data=True)
             run_profit=0.0 # Init Profit on episode
             # Loop inside one episode over number runs 
-            # for run in range(1):
             for run in range(1,run_per_episode+1):
                 print("Episode: {}/{} || Run {}/{}".format(episode, 
                             n_episodes,run,run_per_episode))
@@ -180,7 +184,7 @@ class DRLTrainer():
                     # Compute Action
                     tmp_wallet_value = self.env.wallet_value[0]
                     action = self.agent.compute_action(state)
-                    tmp_action.append(action)
+                    # debug_action.append(action)
                     # round action to one decimal point (that we dont take to small actions)
                     rounded_action = np.round(action, 1) ####### we also round the action in the step() function, just leave both for extra safety.
                     # Compute new step
@@ -215,7 +219,7 @@ class DRLTrainer():
                     if t >=100 and t % 100 == 0:
                         self.save_data(episode,train_data,save_model=False)
                         # Log Checkpoint Info to Screen
-                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
+                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
                     # End Loop over one episode run
                 
                 self.save_data(episode,train_data,save_model=False)
@@ -234,7 +238,7 @@ class DRLTrainer():
             self.save_data(episode,train_data,save_model=True)
 
         # End Loop over episodes
-        return tmp_action
+        # return debug_action
 
     def init_logging_dict(self) -> dict:
         self.log_cols=['episode', 'run', 'action', 'state', 
