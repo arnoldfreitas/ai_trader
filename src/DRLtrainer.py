@@ -48,6 +48,7 @@ class DRLLossFunctions(keras.losses.Loss):
         #     tf.math.sign(y_true)*y_pred*tf.math.log1p(y_true))
         # With or without
         loss = tf.math.scalar_mul(-1, loss, name=None)
+        # loss = tf.math.scalar_mul(tf.math.sign(y_true), loss, name=None)
         return loss
 
 class CustomCallback(keras.callbacks.Callback):
