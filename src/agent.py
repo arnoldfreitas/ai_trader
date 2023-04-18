@@ -7,8 +7,14 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
+# tf.compat.v1.disable_eager_execution()
+import gc
 from typing import Tuple
 from env import BTCMarket_Env
+
+np.random.seed(42)
+random.seed(42)
+
 
 class Trader_Agent():
     '''
@@ -82,7 +88,9 @@ class Trader_Agent():
         # else:
         #     self.build_model()
 
-    def build_model(self, learning_rate=1e-3, loss_function='mse'):
+    def build_model(self, learning_rate=1e-3, 
+                        loss_function='mse',
+                        use_softmax=False,):
         """
         Build Policy model with predefined architecture.
 
@@ -116,15 +124,25 @@ class Trader_Agent():
             # for BTC: "sigmoid"; action_domain in (0, 1)
             layer_output = 'sigmoid'
 
-        model = keras.models.Sequential([
-            keras.layers.InputLayer(input_shape=(self.window_size,self.state_size)),
-            keras.layers.Flatten(),
-            keras.layers.Dense(units=256, activation='relu'),
-            keras.layers.Dense(units=128, activation='relu'),
-            keras.layers.Dense(units=64, activation='relu'),
-            keras.layers.Dense(units=self.action_space, activation=layer_output)
-            ])
-
+        if use_softmax:
+            model = keras.models.Sequential([
+                keras.layers.InputLayer(input_shape=(self.window_size,self.state_size)),
+                keras.layers.Flatten(),
+                keras.layers.Dense(units=256, activation='relu'),
+                keras.layers.Dense(units=128, activation='relu'),
+                keras.layers.Dense(units=64, activation='relu'),
+                keras.layers.Dense(units=self.action_space, activation=layer_output),
+                keras.layers.Softmax()
+                ])
+        else:
+            model = keras.models.Sequential([
+                keras.layers.InputLayer(input_shape=(self.window_size,self.state_size)),
+                keras.layers.Flatten(),
+                keras.layers.Dense(units=256, activation='relu'),
+                keras.layers.Dense(units=128, activation='relu'),
+                keras.layers.Dense(units=64, activation='relu'),
+                keras.layers.Dense(units=self.action_space, activation=layer_output)
+                ])
         #TODO: Build RNN (LSTM) as policy network
         model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
         model.summary()
@@ -134,7 +152,8 @@ class Trader_Agent():
     
     def build_model_LSTM(self, learning_rate=1e-3, 
                          loss_function='mse',
-                         lstm_path=None):
+                         lstm_path=None,
+                         use_softmax=False,):
         """
         Build Policy model with predefined architecture.
 
@@ -181,22 +200,26 @@ class Trader_Agent():
                             tf.reshape(lstm_outputs, 
                             shape=(-1, 10))])
                             # shape=(-1, 5))])
-        dense_1 = keras.layers.Dense(units=256, activation='relu')(dense_inputs)
-        dense_2 = keras.layers.Dense(units=128, activation='relu')(dense_1)
-        dense_3 = keras.layers.Dense(units=64, activation='relu')(dense_2)
+        dense_1 = keras.layers.Dense(units=256, activation='linear')(dense_inputs)
+        dense_2 = keras.layers.Dense(units=128, activation='linear')(dense_1)
+        dense_3 = keras.layers.Dense(units=64, activation='linear')(dense_2)
         output = keras.layers.Dense(units=self.action_space, activation=layer_output)(dense_3)
-        model = keras.Model(input_layer, output)
+        if use_softmax:
+            output = keras.layers.Softmax()(output)
+        self.model = keras.Model(input_layer, output)
         #TODO: Build RNN (LSTM) as policy network
-        model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
-        model.summary()
-        print(f"Model Loss: {model.compiled_loss._losses}")
+        self.model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
+        self.model.summary()
+        # print(f"Model Loss: {self.model.compiled_loss._losses}")
         
-        self.model = model
+        # self.model = model
 
         # self.lstm_model = keras.Model(input_layer, lstm_layer)
         # self.lstm_model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
-    
-    def load_model(self, model_path: str):
+
+    def load_model(self, model_path: str, 
+                         learning_rate=1e-3, 
+                         loss_function='mse',):
         """
         Load TensorFlow Model from h5 file. 
 
@@ -209,20 +232,10 @@ class Trader_Agent():
         -------
             Tensorflow Model 
         """
-        epi_list=[]
-        date_list=[] 
-        for file in os.listdir(self.data_path+"/Bot/models"):
-            if '.h5' in file:
-                date_list.append(file.split('.')[0].split('_')[2])
-                epi_list.append(int(file.split('.')[0].split('_')[3]))
-        load_epi=max(epi_list)
-        load_date=date_list[epi_list.index(load_epi)] 
-        model = keras.models.load_model(
-                self.data_path+"/Bot/models/ai_trade_{}_{}.h5".format(load_date,load_epi))
-
-        print("model: ai_trade_{}_{} loaded. Eplison set to {}.".format(
-                load_date,load_epi,self.epsilon))
-        self.model = model
+        
+        self.model = keras.models.load_model(model_path, compile=False)
+        self.model.compile(loss=loss_function, optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate))
+        self.model.summary()
 
     def compute_action(self, state: np.ndarray) ->  float:
         """
@@ -243,7 +256,13 @@ class Trader_Agent():
             return np.array(action)
       
         # action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size*self.window_size)),verbose = 0)
-        action_val = self.model.predict(state,verbose = 0)[0]
+        state_input = tf.convert_to_tensor(state, dtype=tf.float32)
+        # print(tf.shape(state_input))
+        # action_val = self.model.predict(state_input,verbose = 0,steps=1)[0]
+        action_val = self.model(state_input, training=False)
+        action_val = action_val.numpy()[0]
+        gc.collect()
+        # keras.backend.clear_session()
 
         # round computed value to one decimal point
         # leaving decision about rounding for trainer
@@ -254,3 +273,7 @@ class Trader_Agent():
             self.epsilon+=increase_epsilon
         elif self.epsilon > self.epsilon_final:
             self.epsilon *= self.epsilon_decay
+        else:
+            self.epsilon = self.epsilon_final
+
+        self.epsilon = min([self.epsilon, 1.0])

@@ -7,9 +7,9 @@ import random
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-# physical_devices = tf.config.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 from tensorflow import keras
+# tf.compat.v1.disable_eager_execution()
+import gc
 from tqdm import tqdm_notebook, tqdm
 from matplotlib import pyplot as plt
 import time
@@ -18,6 +18,9 @@ from env import BTCMarket_Env
 from agent import Trader_Agent
 from collections import deque
 
+np.random.seed(42)
+random.seed(42)
+
 class DRLLossFunctions(keras.losses.Loss):
     def __init__(self):
         super().__init__()
@@ -25,16 +28,28 @@ class DRLLossFunctions(keras.losses.Loss):
 
     def call(self, y_true, y_pred):
         '''
-        Function to compute loss for gradient ascent.
-
-        Loss should is defined as the negative of the reward,
-        in order to maximize the objective function, thus performing gradient ascent.
+        Function to compute loss for gradient ascent in DRL Algorithm.
+        
+        Notes
+        -----
+        Function generates very high gradients, therefore we should use low learning rates
+        
+        Parameters
+        ----------
+        y_true := rewards
+        y_pred := actions
         '''
         # loss = -1 * tf.keras.losses.MSE(y_true, 0*y_pred)
         tmp = tf.reduce_mean(y_true*y_pred)
 
         loss = tf.math.scalar_mul(-1, tmp, name=None)
         return loss
+
+class CustomCallback(keras.callbacks.Callback):
+    def on_epoch_end(self, epoch: int, logs=None):
+        # Housekeeping
+        gc.collect()
+        keras.backend.clear_session()
 
 class DRLTrainer():
     '''
@@ -51,6 +66,7 @@ class DRLTrainer():
                 learning_rate: float =1e-3,
                 algorithm: str = 'DRL',
                 lstm_path: str = None,
+                from_checkpoint: dict = None,
                 data_path: str ='./../data',) -> None:
         """
         Receive arguments and initialise the  class params.
@@ -76,26 +92,42 @@ class DRLTrainer():
         self.y_train_shape = (self.batch_size, action_space)
         self.epoch = epoch
         self.gamma = gamma # Decay Constant for DQN
-
+        self.init_episode = 1
 
         # Logging params
+        load_model = None
         time_str=datetime.now().strftime('%Y%m%d_%H%M%S')
         self.train_folder=os.path.abspath(os.path.join(self.data_path, 
-                    time_str, algorithm))
+                time_str, algorithm))
+        if isinstance(from_checkpoint, dict):
+            if ('train_path' in from_checkpoint.keys()):
+                self.train_folder=from_checkpoint['train_path']
+                self.init_episode = from_checkpoint.get('init_episode', 1)
+                load_model = from_checkpoint.get('load_model', None)
+        
         self.train_log_dict = self.init_logging_dict()
-        self.train_log_dataframe = pd.DataFrame(columns=self.log_cols)
+        # self.train_log_dataframe = pd.DataFrame(columns=self.log_cols)
 
         # Init env controllable params
-        self.env._update_log_folder(self.train_folder)
+        self.env._update_log_folder(os.path.abspath(os.path.join(self.train_folder, 'episodes')))
         
         # Init agent controllable params and init model
         self.loss_shift = 1.0
         custom_loss = DRLLossFunctions()
+        # custom_loss = "MSE"
         # self.agent.build_model(learning_rate=learning_rate,
         #                        loss_function=custom_loss) 
-        self.agent.build_model_LSTM(learning_rate=learning_rate,
+        if isinstance(load_model, str) and os.path.exists(load_model):
+            self.agent.load_model(load_model, 
+                                learning_rate=learning_rate,
+                               loss_function=custom_loss,) 
+        else:
+            self.agent.build_model_LSTM(learning_rate=learning_rate,
                                loss_function=custom_loss,
                                lstm_path=lstm_path) 
+
+        tf.compat.v1.get_default_graph().finalize()
+
         
 
     def rollout(self, n_episodes, run_per_episode):
@@ -121,25 +153,25 @@ class DRLTrainer():
         train_cnt = 0
         total_profit = 0
         start_time = time.time()
+        # debug_action = []
         # Loop over every episode
-        # for episode in range(1):
-        for episode in range(1, n_episodes + 1):
+        for episode in range(self.init_episode, n_episodes + 1):
             print("Episode: {}/{}".format(episode, n_episodes))
             if episode % 10 == 0: # Increase Epsilon every 10 episodes
                 self.agent.update_epsilon(increase_epsilon=0.5)
                 print(f'on Episode {episode} set Eplison to {self.agent.epsilon} to find global minimum')
+            self.env.reset(resample_data=True)
             run_profit=0.0 # Init Profit on episode
             # Loop inside one episode over number runs 
-            # for run in range(1):
             for run in range(1,run_per_episode+1):
                 print("Episode: {}/{} || Run {}/{}".format(episode, 
                             n_episodes,run,run_per_episode))
                 if run % 5 == 0: # Increase epsilon every 5 runs
-                    self.agent.update_epsilon(increase_epsilon=0.5 -(run/run_per_episode)*0) # *0 why?
+                    self.agent.update_epsilon(increase_epsilon=0.25 -(run/run_per_episode)*0) # *0 why?
                     print(f'on Run {run} set Eplison to {self.agent.epsilon} to find global minimum')
                 train_data={}
                 run_profit = 0.0
-                self.env.reset()
+                self.env.reset(resample_data=False)
                 data_samples = self.env.episode_length
                 state, _, _ = self.env.step(np.array([0]))
                 for t in tqdm(range(data_samples)):
@@ -147,6 +179,7 @@ class DRLTrainer():
                     # Compute Action
                     tmp_wallet_value = self.env.wallet_value[0]
                     action = self.agent.compute_action(state)
+                    # debug_action.append(action)
                     # round action to one decimal point (that we dont take to small actions)
                     rounded_action = np.round(action, 1) ####### we also round the action in the step() function, just leave both for extra safety.
                     # Compute new step
@@ -181,16 +214,26 @@ class DRLTrainer():
                     if t >=100 and t % 100 == 0:
                         self.save_data(episode,train_data,save_model=False)
                         # Log Checkpoint Info to Screen
-                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit}')
+                        print(f'episode {episode}, run ({run}/{run_per_episode}) sample ({t}/{data_samples}).Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
+                    # End Loop over one episode run
                 
+                self.save_data(episode,train_data,save_model=False)
+                
+                keras.backend.clear_session()
+                # tf.reset_default_graph()
+                gc.collect()
                 # Log Run Info to Screen
                 print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
-            
+                # End Loop over all runs 
+
             # Log Episode Info to Screen
             total_profit+=run_profit
             print(f'episode {episode}/{n_episodes}. Profit {total_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
 
             self.save_data(episode,train_data,save_model=True)
+
+        # End Loop over episodes
+        # return debug_action
 
     def init_logging_dict(self) -> dict:
         self.log_cols=['episode', 'run', 'action', 'state', 
@@ -198,20 +241,22 @@ class DRLTrainer():
         tmp =  { key : [] for key in self.log_cols }
         return tmp
  
-    def log_training(self, episode, run, action, state, reward, done, 
-                epsilon, profit, time_elapsed):
+    def log_training(self, episode_log, run_log, 
+                action_log, state_log, reward_log, 
+                done_log, epsilon_log, profit_log, 
+                time_elapsed_log):
         """
         Add params to log dict
         """
-        self.train_log_dict['episode'].append(episode)
-        self.train_log_dict['run'].append(run)
-        self.train_log_dict['action'].append(action)
-        self.train_log_dict['state'].append(state)
-        self.train_log_dict['reward'].append(reward)
-        self.train_log_dict['done'].append(done)
-        self.train_log_dict['epsilon'].append(epsilon)
-        self.train_log_dict['profit'].append(profit)
-        self.train_log_dict['time_elapsed'].append(time_elapsed)
+        self.train_log_dict['episode'].append(episode_log)
+        self.train_log_dict['run'].append(run_log)
+        self.train_log_dict['action'].append(action_log)
+        self.train_log_dict['state'].append(state_log)
+        self.train_log_dict['reward'].append(reward_log)
+        self.train_log_dict['done'].append(done_log)
+        self.train_log_dict['epsilon'].append(epsilon_log)
+        self.train_log_dict['profit'].append(profit_log)
+        self.train_log_dict['time_elapsed'].append(time_elapsed_log)
 
     def batch_train(self):
         """
@@ -258,8 +303,12 @@ class DRLTrainer():
         # y_target = self.loss_shift - y_target
         # Batch Train (in this case on-line traing without batches) 
         # we can just set the batch to 1 and it will do online training
-        result=self.agent.model.fit(x_train, y_target,
-                epochs=self.epoch, verbose=1)
+        # x_train = tf.convert_to_tensor(x_train, dtype=tf.float32)
+        # y_target = tf.convert_to_tensor(y_target, dtype=tf.float32)
+        result=self.agent.model.fit(x_train, y_target, 
+                epochs=self.epoch, 
+                verbose=0,)
+                # callbacks=[CustomCallback()])
 
         self.agent.update_epsilon()
         return result
@@ -282,16 +331,24 @@ class DRLTrainer():
         if save_model:
             self.agent.model.save(self.train_folder+"models_ai_trade_{}_{}.h5".format(time_str,episode))
         
+        df_path = self.train_folder + f"/Trainer_Data_{episode}.csv"
+        train_log_dataframe = pd.DataFrame(columns=self.log_cols)
+        if os.path.exists(df_path):
+            train_log_dataframe= pd.read_csv(df_path, sep=';')
+        
         # Save info from checkpoint to train_log_dataframe
         tmp = pd.DataFrame.from_dict(self.train_log_dict)
-        self.train_log_dataframe = pd.concat([self.train_log_dataframe, tmp])
+        train_log_dataframe = pd.concat([train_log_dataframe, tmp])
         # Reinit log dict to avoid double logging
         self.train_log_dict = self.init_logging_dict() 
         # Save  train_log_dataframe to file
-        self.train_log_dataframe.to_csv(self.train_folder + f"/Trainer_Data.csv")
+        train_log_dataframe.to_csv(df_path, sep=';', index=False)
+        del train_log_dataframe
         print('Data saved')
 
 if __name__ == "__main__":
+    np.random.seed(42)
+    random.seed(42)
     obs_space = (8,20)
     act_space = 1
     action_domain = (-1.0,1.0) # (0.0, 1.0)

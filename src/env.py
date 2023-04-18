@@ -5,9 +5,12 @@ import math
 import os
 from datetime import datetime
 from sklearn.preprocessing import MinMaxScaler
-import tensorflow as tf
-from tensorflow import keras
+# import tensorflow as tf
+# from tensorflow import keras
 from typing import Tuple, List
+
+np.random.seed(42)
+random.seed(42)
 
 class BTCMarket_Env():
     '''
@@ -33,6 +36,8 @@ class BTCMarket_Env():
         # General Information Params
         self.ep_count = 0
         self.data_path = data_path
+        self.asset =  asset
+        self.asset_is_btc = "BTC" in asset
         self.data_source = self.load_data(asset=asset, onefile=False, source_file=source_file)
         self.len_source = len(self.data_source)
         # print(f"{type(self.data_source), type(self.data_source[0])}")
@@ -73,13 +78,13 @@ class BTCMarket_Env():
         # Params for logging
         time_str=datetime.now().strftime('%Y%m%d_%H%M%S')
         self.log_folder=os.path.abspath(os.path.join(self.data_path, 
-                                        time_str, RL_Algo, 'episodes'))
+                                        time_str, f"{RL_Algo}_{asset}", 'episodes'))
         self.log_dict = None
 
     def _update_log_folder(self, new_log_folder):
         self.log_folder=os.path.abspath(new_log_folder)
 
-    def reset(self) -> None:
+    def reset(self, resample_data=True) -> None:
         """
         Restart/Start episodes 
         Parameters
@@ -93,7 +98,8 @@ class BTCMarket_Env():
         # Init internal Episode Params
         self.ep_timestep: int = 0
         # Episode Data
-        self.ep_data = self.get_random_sample(self.data_source, period=self.ep_period)
+        if resample_data:
+            self.ep_data = self.get_random_sample(self.data_source, period=self.ep_period)
         self.episode_length: int = len(self.ep_data)-1 
         self.ep_count+=1
 
@@ -152,10 +158,15 @@ class BTCMarket_Env():
         assert (self.ep_data is not None)
 
         actual_price = self.ep_data['close'].values[self.ep_timestep]
-        actual_price_btc = self.ep_data['Close_BTC'].values[self.ep_timestep]
-        funding_rating = self.ep_data['Funding_Rate'].values[self.ep_timestep]
-        funding_rating = float(funding_rating.replace("%", ""))/100
-        price_diff= actual_price - self.ep_data['close'].values[min(0,self.ep_timestep-1)]
+        if not self.asset_is_btc:
+            actual_price_btc = self.ep_data['Close_BTC'].values[self.ep_timestep]
+            funding_rating = self.ep_data['Funding_Rate'].values[self.ep_timestep]
+            funding_rating = float(funding_rating.replace("%", ""))/100
+            price_diff= actual_price - self.ep_data['close'].values[min(0,self.ep_timestep-1)]
+        else:
+            actual_price_btc = self.ep_data['close'].values[self.ep_timestep]
+            price_diff = 0
+            funding_rating = 0
         action = np.round(action, 2) # reduce action to 2 decimals to avoid micro transactions
         alt_long = self.long_wallet
 
@@ -167,7 +178,7 @@ class BTCMarket_Env():
             short_value = self.short_wallet[0]*(2*self.short_wallet[1] - actual_price)
             # Compute Funding payment every 8 hours
             funding_money_var = 0
-            if ((self.ep_timestep % 16 == 0) and self.ep_timestep > 1):
+            if ((self.ep_timestep % 16 == 0) and (self.ep_timestep > 1) and (not self.asset_is_btc)):
                 funding_money_var = self.compute_funding(actual_price_swap = actual_price, 
                                                         price_btc = actual_price_btc, 
                                                         long_value = long_value, 
@@ -182,7 +193,7 @@ class BTCMarket_Env():
             short_value = self.short_wallet[0]*(2*self.short_wallet[1] - actual_price)
             # Compute Funding payment every 8 hours
             funding_money_var = 0
-            if ((self.ep_timestep % 16 == 0) and self.ep_timestep > 1):
+            if ((self.ep_timestep % 16 == 0) and (self.ep_timestep > 1) and (not self.asset_is_btc)):
                 funding_money_var = self.compute_funding(actual_price_swap = actual_price, 
                                                         price_btc = actual_price_btc, 
                                                         long_value = long_value, 
@@ -269,7 +280,7 @@ class BTCMarket_Env():
 
     def init_logging_dict(self) -> dict:
         self.log_cols={'episode', 'action', 'state', 'reward', 'done','money',
-            'btc_units','btc_eur','fee_paid', 'swap_price', 'btc_price', 'funding_rate', 'long_wallet', 'short_wallet', 
+            'btc_units','btc_eur','fee_paid', 'product_price', 'btc_price', 'funding_rate', 'long_wallet', 'short_wallet', 
             'wallet_value', 'long_position', 'short_position', 'buy_long_count', 'short_units', 'short_eur', 
             'sell_long_count', 'buy_short_count', 'sell_short_count'}
         tmp =  { key : [] for key in self.log_cols }
@@ -299,7 +310,7 @@ class BTCMarket_Env():
         self.log_dict['fee_paid'].append(fee_paid)
         self.log_dict['btc_price'].append(btc_price)
         self.log_dict['funding_rate'].append(funding_rate)
-        self.log_dict['swap_price'].append(closing_price)
+        self.log_dict['product_price'].append(closing_price)
         self.log_dict['short_position'].append(self.short_position[0])
         self.log_dict['buy_long_count'].append(self.buy_long_count)
         self.log_dict['sell_long_count'].append(self.sell_long_count)
@@ -313,7 +324,7 @@ class BTCMarket_Env():
         os.makedirs(self.log_folder, exist_ok=True)
         
         df = pd.DataFrame.from_dict(self.log_dict)
-        df.to_csv(self.log_folder + f"/Epi_{episode}_run_{run}.csv")
+        df.to_csv(self.log_folder + f"/Epi_{episode}_run_{run}_{self.asset}.csv", index=False, sep=";")
 
     def _handle_long_position(self,
             btc_wallet_variation:float, 
@@ -692,10 +703,9 @@ class BTCMarket_Env():
         #state.append(money)
         return np.array(np.nan_to_num([state]))
 
-    def reward_freestyle(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float, trading_fee:float) -> float:
+    def reward_price_rate_log(self, action: np.ndarray, time_step : float, **kwargs) -> float:
         """
-        Function to compute reward based on state and action.
+        Function to compute reward price rate.
 
         Notes
         -----
@@ -703,17 +713,19 @@ class BTCMarket_Env():
 
         Parameters
         ----------
-        state: np.ndarray, 
         action: np.ndarray,
-        actual_price: float
+        time_step: float
             Acutal BTC Price
         Returns
         -------
         reward
             Reward Value
         """
-
-        return 0
+        if time_step == 0
+            price_rate = 1.0 
+        else:
+            price_rate = self.log_dict['product_price'][time_step] / self.log_dict['product_price'][time_step-1] 
+        return np.log(price_rate)
 
    
     def compute_reward_from_tutor(self, state: np.ndarray, action: np.ndarray,
@@ -737,7 +749,7 @@ class BTCMarket_Env():
             Reward Value
         """
 
-        pos_yield = self.wallet_value / self.start_money
+        pos_yield = self.wallet_value / self.start_money - 1
         return pos_yield
 
     def reward_sharpe_ratio(self, state: np.ndarray, action: np.ndarray,
@@ -875,7 +887,7 @@ class BTCMarket_Env():
         return DSR
 
     def reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float,) -> float:
+                actual_price: float, trading_fee: float) -> float:
         """
         Function to compute Sterling Ratio.
 
