@@ -31,7 +31,8 @@ class DRLLossFunctions(keras.losses.Loss):
         in order to maximize the objective function, thus performing gradient ascent.
         '''
         # loss = -1 * tf.keras.losses.MSE(y_true, 0*y_pred)
-        tmp = tf.abs(tf.reduce_mean(y_true*y_pred))
+        tmp = tf.reduce_mean(y_true*y_pred)
+
         loss = tf.math.scalar_mul(-1, tmp, name=None)
         return loss
 

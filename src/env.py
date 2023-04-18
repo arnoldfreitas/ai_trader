@@ -806,7 +806,7 @@ class BTCMarket_Env():
             Reward Value
         """
 
-        if len(self.log_dict['wallet_value']) < 2:
+        if len(self.log_dict['wallet_value']) < 2: 
             wallet_history = [self.start_money, self.start_money]
         else:
             wallet_history = self.log_dict['wallet_value']
@@ -865,9 +865,9 @@ class BTCMarket_Env():
 
         # execution cost should be the difefrence between bid and ask + trading_fee
         execution_cost = trading_fee # + spread (bid-ask)
-        price_change = actual_price - btc_close_price_history[-1]
+        price_change = (actual_price - btc_close_price_history[-1]) / actual_price
         # calculate representative_return for timestep t+1
-        representative_return = (action_history[-1] * price_change) - execution_cost # - funding_cost * action  
+        representative_return = (action_history[-1] * price_change) #- execution_cost # - funding_cost * action  
         self.variance_returns_squared = tau_decay * self.variance_returns_squared + (1 - tau_decay) * (representative_return - self.expected_return)**2
         self.expected_return = tau_decay * self.expected_return + (1 - tau_decay) * representative_return
         # Calculate DSR utility
