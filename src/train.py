@@ -89,6 +89,7 @@ def conduct_traning(param_combination, i):
                 learning_rate=param_combination.get('learning_rate', 1e-3),
                 algorithm=algorithm,
                 lstm_path="./../notebooks/best_models/11_mar_2023/best_model_sequential_20back_10ahead.h5",
+                loss_method = param_combination.get('loss_method', "stantard_loss"),
                 from_checkpoint = checkpoint,
                            )
                 # best_model_sequential_20back_10ahead lstm_2,
@@ -118,6 +119,7 @@ if __name__=='__main__':
         'money' : [10000], 
         'fee' : [0.001], 
         'asset' : ['BTC'],
+        'loss_method' : ['stantard_loss'],
         'reward_function' : ['compute_reward_from_tutor', 'reward_sharpe_ratio', 'reward_sortino_ratio', 
                             'reward_differential_sharpe_ratio',],
         #     'reward_function' : ['reward_sterling_ratio'],
@@ -147,24 +149,25 @@ if __name__=='__main__':
     # for i , params in enumerate(hpo_params):
     i = 6
     params = {'action_domain': (0.0, 1.0),
-                'algorithm': 'DQN_trial_6',
+                'algorithm': f'DRL_trial_{i}',
                 'asset': 'BTC',
-                'batch_size': 1,
+                'batch_size': 32,
                 'data_source': 'BTC_histData_dt1800.0s_20220825_0629',
                 'episodes': 50,
-                'epoch': 5,
+                'loss_method': "stantard_loss",
+                'epoch': 2,
                 'epsilon': 0.5,
                 'epsilon_decay': 0.75,
                 'epsilon_final': 0.01,
                 'fee': 0.001,
                 'gamma': 0.95,
-                'learning_rate': 0.001,
+                'learning_rate': 10**(-8),
                 'money': 10000,
                 'obs_space': (8, 20),
-                'reward_function': 'reward_sharpe_ratio',
+                'reward_function': 'reward_differential_sharpe_ratio',
                 'runs_p_eps': 5,
                 'action_space': 4,
-                'trainer': 'DQNTrainer', # DRLTrainer DQNTrainer
+                'trainer': 'DRLTrainer', # DRLTrainer DQNTrainer
                 'from_checkpoint': None # None from_checkpoint
                 }
 

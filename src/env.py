@@ -23,7 +23,7 @@ class BTCMarket_Env():
                 action_space: tuple,
                 start_money: float,
                 trading_fee: float = 0,
-                asset: str = 'SWAP',
+                asset: str = 'BTC',
                 reward_function: str = 'compute_reward_from_tutor',
                 ep_period: int = 2*24*14,
                 ep_data_cols: List[str]=['close','histogram','50ema','rsi14'],
@@ -80,6 +80,7 @@ class BTCMarket_Env():
         self.log_folder=os.path.abspath(os.path.join(self.data_path, 
                                         time_str, f"{RL_Algo}_{asset}", 'episodes'))
         self.log_dict = None
+        self.reward_log_dict = None
 
     def _update_log_folder(self, new_log_folder):
         self.log_folder=os.path.abspath(new_log_folder)
@@ -127,8 +128,10 @@ class BTCMarket_Env():
         self.buy_short_count: float = 0
         self.sell_short_count: float = 0
 
+
         # Init Logging
         self.log_dict = self.init_logging_dict()
+        self.reward_log_dict = None
 
     def step(self, 
             action: np.ndarray, # value in [-1,1] representing position of bitcoin to have in wallet on t+1
@@ -721,7 +724,7 @@ class BTCMarket_Env():
         reward
             Reward Value
         """
-        if time_step == 0
+        if time_step  < 1:
             price_rate = 1.0 
         else:
             price_rate = self.log_dict['product_price'][time_step] / self.log_dict['product_price'][time_step-1] 
@@ -862,19 +865,28 @@ class BTCMarket_Env():
         # Look at Paper DRRL-Agent and Link in Word in googledrive for calculation details
         # Eventually evaluate these paraeters through grid-search
         # tau_decay parameter 
-        tau_decay = 0.9999
+        tau_decay = 0.99
         # Gamma is set to this value in the paper (rrl agent)
-        gamma = 0.00001
+        gamma = 0.001
         # get historical data for calculations
         if len(self.log_dict['btc_price']) < 2:
             btc_close_price_history = [actual_price, actual_price]
         else:
             btc_close_price_history = self.log_dict['btc_price']
+
         if not self.log_dict['action']:
             action_history = [action]
         else:
             action_history = self.log_dict['action']
 
+        
+        # if self.reward_log_dict is None:
+        #     self.reward_log_dict = {}
+        #     self.reward_log_dict["price_change"] = [0]
+        #     self.reward_log_dict["var_returns_squared"]  = [self.variance_returns_squared[0]]
+        #     self.reward_log_dict["expected_return"]  = [self.expected_return[0]]
+
+        # execution cost should be the difefrence between bid and ask + trading_fee
         # execution cost should be the difefrence between bid and ask + trading_fee
         execution_cost = trading_fee # + spread (bid-ask)
         price_change = (actual_price - btc_close_price_history[-1]) / actual_price
@@ -884,6 +896,11 @@ class BTCMarket_Env():
         self.expected_return = tau_decay * self.expected_return + (1 - tau_decay) * representative_return
         # Calculate DSR utility
         DSR = self.expected_return - gamma / 2 * self.variance_returns_squared
+
+        # Update dict for loss function
+        # self.reward_log_dict["price_change"].append(price_change)
+        # self.reward_log_dict["var_returns_squared"].append(self.variance_returns_squared[0])
+        # self.reward_log_dict["expected_return"].append(self.expected_return[0])
         return DSR
 
     def reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,

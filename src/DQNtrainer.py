@@ -140,7 +140,7 @@ class DQNTrainer():
                 print("Episode: {}/{} || Run {}/{}".format(episode, 
                             n_episodes,run,run_per_episode))
                 if run % 5 == 0: # Increase epsilon every 5 runs
-                    self.agent.update_epsilon(increase_epsilon=0.25 -(run/run_per_episode)*0)
+                    self.agent.update_epsilon(increase_epsilon=0.25)
                     print(f'on Run {run} set Eplison to {self.agent.epsilon} to find global minimum')
                 train_data={}
                 run_profit = 0.0
