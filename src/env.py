@@ -280,7 +280,7 @@ class BTCMarket_Env():
 
     def init_logging_dict(self) -> dict:
         self.log_cols={'episode', 'action', 'state', 'reward', 'done','money',
-            'btc_units','btc_eur','fee_paid', 'swap_price', 'btc_price', 'funding_rate', 'long_wallet', 'short_wallet', 
+            'btc_units','btc_eur','fee_paid', 'product_price', 'btc_price', 'funding_rate', 'long_wallet', 'short_wallet', 
             'wallet_value', 'long_position', 'short_position', 'buy_long_count', 'short_units', 'short_eur', 
             'sell_long_count', 'buy_short_count', 'sell_short_count'}
         tmp =  { key : [] for key in self.log_cols }
@@ -310,7 +310,7 @@ class BTCMarket_Env():
         self.log_dict['fee_paid'].append(fee_paid)
         self.log_dict['btc_price'].append(btc_price)
         self.log_dict['funding_rate'].append(funding_rate)
-        self.log_dict['swap_price'].append(closing_price)
+        self.log_dict['product_price'].append(closing_price)
         self.log_dict['short_position'].append(self.short_position[0])
         self.log_dict['buy_long_count'].append(self.buy_long_count)
         self.log_dict['sell_long_count'].append(self.sell_long_count)
@@ -703,10 +703,9 @@ class BTCMarket_Env():
         #state.append(money)
         return np.array(np.nan_to_num([state]))
 
-    def reward_freestyle(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float, trading_fee:float) -> float:
+    def reward_price_rate_log(self, action: np.ndarray, time_step : float, **kwargs) -> float:
         """
-        Function to compute reward based on state and action.
+        Function to compute reward price rate.
 
         Notes
         -----
@@ -714,17 +713,19 @@ class BTCMarket_Env():
 
         Parameters
         ----------
-        state: np.ndarray, 
         action: np.ndarray,
-        actual_price: float
+        time_step: float
             Acutal BTC Price
         Returns
         -------
         reward
             Reward Value
         """
-
-        return 0
+        if time_step == 0
+            price_rate = 1.0 
+        else:
+            price_rate = self.log_dict['product_price'][time_step] / self.log_dict['product_price'][time_step-1] 
+        return np.log(price_rate)
 
    
     def compute_reward_from_tutor(self, state: np.ndarray, action: np.ndarray,
