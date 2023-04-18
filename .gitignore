@@ -8,6 +8,10 @@ __pycache__/
 data/
 */fil-result/*
 /fil-result/
+*/results/*
+/results/
+*/result/*
+/result/
 
 # Distribution / packaging
 .Python
