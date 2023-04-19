@@ -120,7 +120,7 @@ if __name__=='__main__':
         'fee' : [0.001], 
         'asset' : ['BTC'],
         'loss_method' : ['stantard_loss'],
-        'reward_function' : ['compute_reward_from_tutor', 'reward_sharpe_ratio', 'reward_sortino_ratio', 
+        'reward_function' : ['compute_reward_from_tutor', 'reward_sharpe_ratio', 'reward_sortino_ratio', 'reward_profit',
                             'reward_differential_sharpe_ratio',],
         #     'reward_function' : ['reward_sterling_ratio'],
 
@@ -147,29 +147,30 @@ if __name__=='__main__':
     #                     'load_model': '/home/jovyan/ai_trader/data/20230410_171735/DQN_trial_5models_ai_trade_20230411_124435_46.h5'}
 
     # for i , params in enumerate(hpo_params):
-    i = 7
-    params = {'action_domain': (0.0, 1.0),
-                'algorithm': f'DRL_trial_{i}',
-                'asset': 'BTC',
-                'batch_size': 32,
-                'data_source': 'BTC_histData_dt1800.0s_20220825_0629',
-                'episodes': 50,
-                'loss_method': "stantard_loss",
-                'epoch': 2,
-                'epsilon': 0.5,
-                'epsilon_decay': 0.75,
-                'epsilon_final': 0.01,
-                'fee': 0.001,
-                'gamma': 0.95,
-                'learning_rate': 10**(-7),
-                'money': 10000,
-                'obs_space': (8, 20),
-                'reward_function': 'reward_differential_sharpe_ratio',
-                'runs_p_eps': 5,
-                'action_space': 1,
-                'trainer': 'DRLTrainer', # DRLTrainer DQNTrainer
-                'from_checkpoint': None # None from_checkpoint
-                }
+    i = 8
+    params = {
+        'action_domain': (0.0, 1.0),
+        'algorithm': f'DRL_trial_{i}',
+        'asset': 'BTC',
+        'batch_size': 32,
+        'data_source': 'BTC_histData_dt1800.0s_20220825_0629',
+        'episodes': 50,
+        'loss_method': "stantard_loss",
+        'epoch': 2,
+        'epsilon': 0.5,
+        'epsilon_decay': 0.75,
+        'epsilon_final': 0.01,
+        'fee': 0.001,
+        'gamma': 0.95,
+        'learning_rate': 10**(-6),
+        'money': 10000,
+        'obs_space': (8, 20),
+        'reward_function': 'reward_profit',
+        'runs_p_eps': 5,
+        'action_space': 1,
+        'trainer': 'DRLTrainer', # DRLTrainer DQNTrainer
+        'from_checkpoint': None # None from_checkpoint
+        }
 
     train_folder = conduct_traning(params, i)
 

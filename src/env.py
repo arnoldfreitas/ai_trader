@@ -903,6 +903,43 @@ class BTCMarket_Env():
         # self.reward_log_dict["expected_return"].append(self.expected_return[0])
         return DSR
 
+    def reward_profit(self, state: np.ndarray, action: np.ndarray,
+                actual_price: float, trading_fee:float) -> float:
+        """
+        Function to compute reward based on state and action.
+
+        Notes
+        -----
+        build state as in rl_agent.AI_Trader.get_reward_money
+
+        Parameters
+        ----------
+        state: np.ndarray, 
+        action: np.ndarray,
+        actual_price: float
+            Acutal BTC Price
+        Returns
+        -------
+        reward
+            Reward Value
+        """
+
+        if len(self.log_dict['btc_price']) < 2:
+            btc_close_price_history = [actual_price, actual_price]
+        else:
+            btc_close_price_history = self.log_dict['btc_price']
+
+        # calculate price change 
+        price_change = (actual_price - btc_close_price_history[-1]) / btc_close_price_history[-1]
+
+        if action < 0.1:
+            # if action is 0: reward is positive, if action = 0 and price decreased
+            relative_profit = price_change * (-1)
+        else:
+            # case action > 0, multiplicaation with 10 to intensivise the trader to take actions
+            relative_profit = action * price_change * 10
+        return relative_profit
+
     def reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float, trading_fee: float) -> float:
         """
@@ -933,7 +970,7 @@ class BTCMarket_Env():
         # Build array of complete wallet_history
         wallet_history = np.concatenate([wallet_history, [self.wallet_value]])
         cummulative_return = (self.wallet_value - self.start_money) / self.start_money
-        # CXalculate max Drawdown in given time period
+        # Calculate max Drawdown in given time period
         relative_drawdown = np.maximum.accumulate(wallet_history) - wallet_history
         absolute_drawdown = relative_drawdown / wallet_history
         max_drawadown = np.max(absolute_drawdown)
