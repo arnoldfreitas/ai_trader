@@ -129,7 +129,7 @@ if __name__=='__main__':
         'episodes' : [50], 
         'runs_p_eps' : [5], 
         'batch_size': [1],
-        'epoch': [5],
+        'epoch': [2],
         'gamma': [0.95],
 
         'epsilon': [0.7],
@@ -147,7 +147,7 @@ if __name__=='__main__':
     #                     'load_model': '/home/jovyan/ai_trader/data/20230410_171735/DQN_trial_5models_ai_trade_20230411_124435_46.h5'}
 
     # for i , params in enumerate(hpo_params):
-    i = 6
+    i = 7
     params = {'action_domain': (0.0, 1.0),
                 'algorithm': f'DRL_trial_{i}',
                 'asset': 'BTC',
@@ -161,12 +161,12 @@ if __name__=='__main__':
                 'epsilon_final': 0.01,
                 'fee': 0.001,
                 'gamma': 0.95,
-                'learning_rate': 10**(-8),
+                'learning_rate': 10**(-7),
                 'money': 10000,
                 'obs_space': (8, 20),
                 'reward_function': 'reward_differential_sharpe_ratio',
                 'runs_p_eps': 5,
-                'action_space': 4,
+                'action_space': 1,
                 'trainer': 'DRLTrainer', # DRLTrainer DQNTrainer
                 'from_checkpoint': None # None from_checkpoint
                 }
