@@ -3,15 +3,20 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+
 # Data
 *.csv
-data/
+/data/*
 */fil-result/*
 /fil-result/
 */results/*
 /results/
 */result/*
 /result/
+
+# Save Training Data to git anyways
+!/data
+!/data/BTC_histData_dt1800.0s_20220825_0629.csv
 
 # Distribution / packaging
 .Python
