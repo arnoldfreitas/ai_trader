@@ -50,6 +50,7 @@ class BTCMarket_Env():
         self.money_fiktiv = None
         self.expected_return = None
         self.variance_returns_squared = None
+        self.mult_profit = None
 
         # States / Observation
         self.observation_space = observation_space 
@@ -121,6 +122,7 @@ class BTCMarket_Env():
         # Return history paramerter for reward computation
         self.expected_return = np.array([0])
         self.variance_returns_squared = np.array([0])
+        self.mult_profit = np.array([0])
 
         # the following are just for now until we decide 
         self.buy_long_count: float = 0
@@ -782,23 +784,31 @@ class BTCMarket_Env():
         # 3. If std() is zero?
 
         # Get historical data
-        if len(self.log_dict['wallet_value']) < 2:
-            wallet_history = [self.start_money, self.start_money]
+        if len(self.log_dict['btc_price']) < 2:
+            btc_close_price_history = [actual_price, actual_price]
         else:
-            wallet_history = self.log_dict['wallet_value']
-        #net_returns = wallet_history[-99:-1] - wallet_history[-100:]
-        #wallet_history[1:] - wallet_history[0:-1]
-        # The net_returns are all returns including timestep t
-        net_returns = [wallet_history[i] - wallet_history[i-1] for i in range(1,len(wallet_history))] 
-        # calculate net_return for timestep t+1, Equation: return = return to this timestep - new trading_fee
-        return_new_timestep = (self.wallet_value - wallet_history[-1]) - trading_fee
-        net_returns = np.append(net_returns, return_new_timestep)
-        # Now compute sharpe ratio
-        if net_returns.std() == 0:
-            return 0
+            btc_close_price_history = self.log_dict['btc_price']
+        if not self.log_dict['action']:
+            action_history = [action]
         else:
-            SR = net_returns.mean() / net_returns.std()
-            return SR
+            action_history = self.log_dict['action']
+
+        # calculate relative price change 
+        price_change = actual_price / btc_close_price_history[-1] - 1 # / btc_close_price_history[-1]
+        execution_cost = trading_fee / btc_close_price_history[-1]
+        
+        if action < 0.1:
+            # if action is 0: reward is positive if action = 0 and price decreased
+            # trading fee only if action is different 
+            relative_profit = (-1) * price_change - execution_cost * (action_history[-1] > 0)
+        else:
+            # case action > 0, multiplicaation with 10 to intensivise the trader to take actions
+            # trading fee only if action is different
+            relative_profit = (action_history[-1] * price_change - execution_cost * (action_history[-1] != action)) * 2
+            # action * self.wallet.value / actual_price
+                    
+        return relative_profit
+
 
     def reward_sortino_ratio(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float, trading_fee: float) -> float:
