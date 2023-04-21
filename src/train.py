@@ -36,7 +36,7 @@ def enable_memory_growth():
         try:
             tf.config.set_logical_device_configuration(
                 gpus[0],
-                [tf.config.LogicalDeviceConfiguration(memory_limit=3072)])
+                [tf.config.LogicalDeviceConfiguration(memory_limit=6144)])
             logical_gpus = tf.config.list_logical_devices('GPU')
             print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
         except RuntimeError as e:
@@ -147,10 +147,10 @@ if __name__=='__main__':
     #                     'load_model': '/home/jovyan/ai_trader/data/20230410_171735/DQN_trial_5models_ai_trade_20230411_124435_46.h5'}
 
     # for i , params in enumerate(hpo_params):
-    i = 8
+    i = 0
     params = {
         'action_domain': (0.0, 1.0),
-        'algorithm': f'DRL_trial_{i}',
+        'algorithm': f'DQN_trial_{i}',
         'asset': 'BTC',
         'batch_size': 16,
         'data_source': 'BTC_histData_dt1800.0s_20220825_0629',
@@ -162,13 +162,13 @@ if __name__=='__main__':
         'epsilon_final': 0.01,
         'fee': 0.001,
         'gamma': 0.95,
-        'learning_rate': 10**(-5),
+        'learning_rate': 10**(-3),
         'money': 10000,
         'obs_space': (8, 20),
-        'reward_function': 'reward_profit',
+        'reward_function': 'compute_reward_from_tutor',
         'runs_p_eps': 5,
-        'action_space': 1,
-        'trainer': 'DRLTrainer', # DRLTrainer DQNTrainer
+        'action_space': 4, # 4 for DQNTrainer
+        'trainer': 'DQNTrainer', # DRLTrainer DQNTrainer
         'from_checkpoint': None # None from_checkpoint
         }
 

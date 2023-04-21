@@ -938,17 +938,30 @@ class BTCMarket_Env():
             btc_close_price_history = [actual_price, actual_price]
         else:
             btc_close_price_history = self.log_dict['btc_price']
+        if not self.log_dict['action']:
+            action_history = [action]
+        else:
+            action_history = self.log_dict['action']
 
-        # calculate price change 
-        price_change = (actual_price - btc_close_price_history[-1]) / btc_close_price_history[-1]
+        # calculate relative price change 
+        price_change = actual_price / btc_close_price_history[-1] - 1 # / btc_close_price_history[-1]
+        execution_cost = trading_fee / btc_close_price_history[-1]
+        
+        if isinstance(action, np.ndarray): 
+            action = action[0]
 
         if action < 0.1:
-            # if action is 0: reward is positive, if action = 0 and price decreased
-            relative_profit = price_change * (-1)
+            # if action is 0: reward is positive if action = 0 and price decreased
+            # trading fee only if action is different
+            relative_profit = ((-1) * price_change - execution_cost) #* 3
         else:
             # case action > 0, multiplicaation with 10 to intensivise the trader to take actions
-            relative_profit = action * price_change * 10
+            # trading fee only if action is different
+            relative_profit = (action_history[-1] * price_change - execution_cost) #* 2
+            # action * self.wallet.value / actual_price
+                    
         return relative_profit
+
 
     def reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,
                 actual_price: float, trading_fee: float) -> float:

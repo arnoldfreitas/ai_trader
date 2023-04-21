@@ -43,6 +43,7 @@ class DQNTrainer():
                 learning_rate: float =1e-3,
                 algorithm: str = 'DQN',
                 lstm_path: str = None,
+                loss_method: str = None,
                 from_checkpoint: dict = None,
                 data_path: str ='./../data',) -> None:
         """
@@ -234,18 +235,14 @@ class DQNTrainer():
         """
         act_eval = np.argmax(actions)
         if act_eval == 1:
-            action = 0.5
+            act = 0.5
         elif act_eval == 2:
-            action = 1.0
+            act = 1.0
         elif act_eval == 3:
-            action = 0.0
-        elif act_eval == 4:
-            action = -0.5
-        elif act_eval == 5:
-            action = -1.0
+            act = 0.0
         else:
-            action = self.env.long_position
-        return np.array([action])
+            act = self.env.long_position[0]
+        return np.array([act]).reshape((1,))
 
     def batch_train(self):
         """
