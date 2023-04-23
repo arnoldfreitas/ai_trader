@@ -957,7 +957,7 @@ class BTCMarket_Env():
         else:
             # case action > 0, multiplicaation with 10 to intensivise the trader to take actions
             # trading fee only if action is different
-            relative_profit = (action_history[-1] * price_change - execution_cost) #* 2
+            relative_profit = (action_history[-1] * price_change - execution_cost) * 10
             # action * self.wallet.value / actual_price
                     
         return relative_profit
