@@ -708,7 +708,7 @@ class BTCMarket_Env():
         #state.append(money)
         return np.array(np.nan_to_num([state]))
 
-    def reward_price_rate_log(self, action: np.ndarray, time_step : float, **kwargs) -> float:
+    def reward_price_rate_log(self, action: np.ndarray, time_step : float, **kwargs) -> np.ndarray:
         """
         Function to compute reward price rate.
 
@@ -730,11 +730,12 @@ class BTCMarket_Env():
             price_rate = 1.0 
         else:
             price_rate = self.log_dict['product_price'][time_step] / self.log_dict['product_price'][time_step-1] 
-        return np.log(price_rate)
+        log_price = np.log(price_rate)
+        return np.array(log_price).reshape((1,))
 
-   
+
     def compute_reward_from_tutor(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float, trading_fee:float) -> float:
+                actual_price: float, trading_fee:float) -> np.ndarray:
         """
         Function to compute reward based on state and action.
 
@@ -754,11 +755,12 @@ class BTCMarket_Env():
             Reward Value
         """
 
-        pos_yield = self.wallet_value / self.start_money - 1
-        return pos_yield
+        pos_yield = (self.wallet_value[0] / self.start_money) - 1
+        return np.array(pos_yield).reshape((1,))
+
 
     def reward_sharpe_ratio(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float, trading_fee: float) -> float:
+                actual_price: float, trading_fee: float) -> np.ndarray:
         """
         Function to compute Sharpe Ratio.
 
@@ -807,11 +809,11 @@ class BTCMarket_Env():
             relative_profit = (action_history[-1] * price_change - execution_cost * (action_history[-1] != action)) * 2
             # action * self.wallet.value / actual_price
                     
-        return relative_profit
+        return np.array(relative_profit).reshape((1,))
 
 
     def reward_sortino_ratio(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float, trading_fee: float) -> float:
+                actual_price: float, trading_fee: float) -> np.ndarray:
         """
         Function to compute Sortino Ratio.
 
@@ -846,13 +848,14 @@ class BTCMarket_Env():
         negative_net_returns = net_returns[mask_negative_net_returns]
         # Now compute sortino ratio
         if negative_net_returns.std() == 0:
-            return 0
+            return np.array(0.0).reshape((1,))
         else:
             STR = net_returns.mean() / negative_net_returns.std()
-            return STR
+            return np.array(STR).reshape((1,))
+
 
     def reward_differential_sharpe_ratio(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float, trading_fee: float) -> float:
+                actual_price: float, trading_fee: float) -> np.ndarray:
         """
         
         Function to compute Differential Sharpe Ratio.
@@ -911,10 +914,11 @@ class BTCMarket_Env():
         # self.reward_log_dict["price_change"].append(price_change)
         # self.reward_log_dict["var_returns_squared"].append(self.variance_returns_squared[0])
         # self.reward_log_dict["expected_return"].append(self.expected_return[0])
-        return DSR
+        return np.array(DSR).reshape((1,))
+
 
     def reward_profit(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float, trading_fee:float) -> float:
+                actual_price: float, trading_fee:float) -> np.ndarray:
         """
         Function to compute reward based on state and action.
 
@@ -959,12 +963,12 @@ class BTCMarket_Env():
             # trading fee only if action is different
             relative_profit = (action_history[-1] * price_change - execution_cost) * 10
             # action * self.wallet.value / actual_price
-                    
-        return relative_profit
+
+        return np.array(relative_profit).reshape((1,))
 
 
     def reward_sterling_ratio(self, state: np.ndarray, action: np.ndarray,
-                actual_price: float, trading_fee: float) -> float:
+                actual_price: float, trading_fee: float) -> np.ndarray:
         """
         Function to compute Sterling Ratio.
 
@@ -1000,7 +1004,8 @@ class BTCMarket_Env():
 
         # Compute Sterling Ratio
         STRR = cummulative_return / (max_drawadown + 0.1)
-        return STRR
+        return np.array(STRR).reshape((1,))
+
 
     def sigmoid(self,x):
         try:
@@ -1008,11 +1013,13 @@ class BTCMarket_Env():
         except OverflowError:
             result = math.inf
         return 1 /(1 + result)
- 
+
+
     def get_random_sample(self, data_in, period):
         start=random.randint(0,len(data_in)-period)
         return data_in.iloc[start:start+period,:] 
- 
+
+
     def load_data(self,asset=None,
             onefile=False,# kept for retro compatibility 
             source_file: str = None,):
@@ -1026,6 +1033,7 @@ class BTCMarket_Env():
         for item in out:
             out_df=pd.concat([out_df,item])
         return out_df
+
 
     @staticmethod 
     def stock_price_format(n):

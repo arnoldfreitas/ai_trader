@@ -253,7 +253,15 @@ class Trader_Agent():
             action = []
             for _ in range(self.action_space):
                 action.append(random.uniform(*self.action_domain))
-            return np.array(action)
+
+            if self.action_space > 1: # DQN
+                out = tf.nn.softmax(np.array(action))
+                out= out.numpy()
+            else:  # DRL
+                out = np.array(action)
+
+            gc.collect()
+            return out
       
         # action_val = self.model.predict(tf.reshape(tf.convert_to_tensor(state[0],dtype=np.float32),shape=(1,self.state_size*self.window_size)),verbose = 0)
         state_input = tf.convert_to_tensor(state, dtype=tf.float32)

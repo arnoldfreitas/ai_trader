@@ -125,6 +125,7 @@ class DQNTrainer():
         total_profit = 0
         start_time = time.time()
         # debug_action = []
+        # debug_dqnaction = []
 
         # Loop over every episode
         # for episode in range(1):
@@ -147,25 +148,28 @@ class DQNTrainer():
                 run_profit = 0.0
                 self.env.reset(resample_data=False)
                 data_samples = self.env.episode_length
-                state, _, _ = self.env.step(np.array([0]))
+                old_action = np.array([0.0])
+                state, _, _ = self.env.step(np.array([0.0]))
                 for t in tqdm(range(data_samples)):
                     # Compute Action
                     tmp_wallet_value = self.env.wallet_value[0]
                     action = self.agent.compute_action(state)
                     # Transform Action from Policy to Env Requirement 
-                    dqn_action = self.transform_to_dqn_action(action)
-                    # debug_action.append(dqn_action)
+                    dqn_action = self.transform_to_dqn_action(action, old_action)
+                    # debug_action.append(action)
+                    # debug_dqnaction.append(dqn_action)
                     # Compute new step
                     next_state, reward, done = self.env.step(action=dqn_action)
                     # save Experience to Memory
                     self.memory.append((state, action, reward, next_state, done))
+                    old_action = dqn_action
                     state = next_state
                     step_profit = self.env.wallet_value[0] - tmp_wallet_value
                     run_profit += step_profit
 
                     # save to logging
                     elapsed_time = time.time() - start_time
-                    self.log_training(episode, run, action, state, reward, done, self.agent.epsilon, run_profit, elapsed_time)
+                    self.log_training(episode, run, action, state, reward, done, self.agent.epsilon, run_profit, elapsed_time, dqn_action)
                     # Check if is Done
                     if done:
                         self.env.log_episode_to_file(episode=episode, run=run)
@@ -173,7 +177,8 @@ class DQNTrainer():
 
                     # Train Policy if batch reached
                     if len(self.memory) > self.batch_size:
-                        res = self.batch_train()
+                        res = self.batch_train(self.memory)
+                        self.memory.clear()
                         key_string=f'Epi_{episode}'
                         if key_string not in train_data:
                             train_data.update({key_string:{'loss':[res.history['loss']],'#trains':train_cnt,'epsilon':[self.agent.epsilon]}})
@@ -196,7 +201,7 @@ class DQNTrainer():
                 # tf.reset_default_graph()
                 gc.collect()
                 # Log Run Info to Screen
-                print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)}')
+                print(f'episode {episode}, finished run ({run}/{run_per_episode}). Run Profit {run_profit} || money available: {(self.env.money_available)},  wallet value: {(self.env.wallet_value)} ')
                 # End Loop over all runs 
 
             # self.save_data(episode,train_data,save_model=True)
@@ -207,30 +212,33 @@ class DQNTrainer():
             self.save_data(episode,train_data,save_model=True)
 
         # End Loop over episodes
-        # return debug_action
+        # return debug_action, debug_dqnaction
 
     def init_logging_dict(self) -> dict:
-        self.log_cols=['episode', 'run', 'action', 'state', 
+        self.log_cols=['episode', 'run', 'action', 'dqn_action', 'state', 
                     'reward', 'done','epsilon', 'profit', 'time_elapsed']
         tmp =  { key : [] for key in self.log_cols }
         return tmp
  
-    def log_training(self, episode, run, action, state, reward, done, 
-                epsilon, profit, time_elapsed):
+    def log_training(self, episode_log, 
+                    run_log, action_log, state_log, reward_log, 
+                    done_log, epsilon_log, profit_log, 
+                    time_elapsed_log, dqn_act_log):
         """
         Add params to log dict
         """
-        self.train_log_dict['episode'].append(episode)
-        self.train_log_dict['run'].append(run)
-        self.train_log_dict['action'].append(action)
-        self.train_log_dict['state'].append(state)
-        self.train_log_dict['reward'].append(reward)
-        self.train_log_dict['done'].append(done)
-        self.train_log_dict['epsilon'].append(epsilon)
-        self.train_log_dict['profit'].append(profit)
-        self.train_log_dict['time_elapsed'].append(time_elapsed)
+        self.train_log_dict['episode'].append(episode_log)
+        self.train_log_dict['run'].append(run_log)
+        self.train_log_dict['action'].append(action_log)
+        self.train_log_dict['dqn_action'].append(dqn_act_log)
+        self.train_log_dict['state'].append(state_log)
+        self.train_log_dict['reward'].append(reward_log)
+        self.train_log_dict['done'].append(done_log)
+        self.train_log_dict['epsilon'].append(epsilon_log)
+        self.train_log_dict['profit'].append(profit_log)
+        self.train_log_dict['time_elapsed'].append(time_elapsed_log)
 
-    def transform_to_dqn_action(self, actions):
+    def transform_to_dqn_action(self, actions, saved_action):
         """
         """
         act_eval = np.argmax(actions)
@@ -241,10 +249,11 @@ class DQNTrainer():
         elif act_eval == 3:
             act = 0.0
         else:
-            act = self.env.long_position[0]
+            # act = self.env.long_position[0]
+            return np.array(saved_action).reshape((1,))
         return np.array([act]).reshape((1,))
 
-    def batch_train(self):
+    def batch_train(self, batch_memory):
         """
         Conduct batch train.
 
@@ -263,50 +272,41 @@ class DQNTrainer():
             Tensorflow Training History
         """
         batch = []
-        for i in range(max([len(self.memory) - self.batch_size, 0]), len(self.memory)):
-            batch.append(self.memory[i])
-        self.memory.clear()
+        for i in range(max([len(batch_memory) - self.batch_size, 0]), len(batch_memory)):
+            batch.append(batch_memory[i])
+        # self.memory.clear()
         # init batch train vars for data
         x_train = np.zeros(self.x_train_shape)
         y_train = np.zeros(self.y_train_shape)
 
         # init state, action, reward for training
-        state, _, reward, next_state , done = batch[0]
-        state_input = tf.convert_to_tensor(state, dtype=tf.float32)
-        # action = self.agent.model.predict(state_input,verbose = 0,steps=1)
-        action = self.agent.model(state_input, training=False)
-        action = action.numpy()
+        state_tr, _, reward_tr, next_state_tr, done_tr = batch[0]
+        state_input_tr = tf.convert_to_tensor(state_tr, dtype=tf.float32)
+        action_tr = self.agent.model(state_input_tr, training=False)
+        action_tr = action_tr.numpy()
         for index in range(1,len(batch)):
-            # Unused code for keeping track of the past
-            # state = tf.reshape(tf.convert_to_tensor(state,dtype=np.float32),
-            #                     shape=(1,self.state_size*self.window_size))
-            # next_state = tf.reshape(tf.convert_to_tensor(next_state,dtype=np.float32),
-            #                     shape=(1,self.state_size*self.window_size))
-            # check for nan values, or may occur errors during training
-            if np.any(np.isnan(state)) or \
-                np.any(np.isnan(reward)) or np.any(np.isnan(action)):
+            if np.any(np.isnan(state_tr)) or \
+                np.any(np.isnan(reward_tr)) or np.any(np.isnan(action_tr)):
                 raise ValueError("nan value found")
 
-            # Compute Reward Decay for DQN
-            
-            state_input = tf.convert_to_tensor(next_state, dtype=tf.float32)
-            # action_next = self.agent.model.predict(state_input,verbose = 0,steps=1)
-            action_next = self.agent.model(state_input, training=False)
-            action_next = action_next.numpy()
-            if not done:
-                reward += self.gamma * np.max(action_next)
+            # Compute Reward Decay for DQN            
+            state_input_tr = tf.convert_to_tensor(next_state_tr, dtype=tf.float32)
+            action_next_tr = self.agent.model(state_input_tr, training=False)
+            action_next_tr = action_next_tr.numpy()
+            if not done_tr:
+                reward_tr += self.gamma * np.max(action_next_tr)
 
             # Compute new target
-            target = action
+            target = action_tr
             id_act = np.argmax(target)
-            target[0,id_act] = reward
+            target[0,id_act] = reward_tr
 
             # Update training data
-            x_train[index]= state[0]
+            x_train[index]= state_tr[0]
             y_train[index]= target[0]
             # update state, action, reward for training
-            state, _, reward, next_state , done = batch[index]
-            action = action_next
+            state_tr, _, reward_tr, next_state_tr, done_tr = batch[index]
+            action_tr = action_next_tr
 
         # Batch Train
         
