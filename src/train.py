@@ -36,7 +36,7 @@ def enable_memory_growth():
         try:
             tf.config.set_logical_device_configuration(
                 gpus[0],
-                [tf.config.LogicalDeviceConfiguration(memory_limit=6144)])
+                [tf.config.LogicalDeviceConfiguration(memory_limit=3072)])
             logical_gpus = tf.config.list_logical_devices('GPU')
             print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
         except RuntimeError as e:
@@ -106,7 +106,7 @@ def conduct_traning(param_combination, i):
 if __name__=='__main__':
     np.random.seed(42)
     random.seed(42)
-    enable_memory_growth()
+    # enable_memory_growth()
 
     training_folders = []
 
@@ -162,10 +162,10 @@ if __name__=='__main__':
         'epsilon_final': 0.01,
         'fee': 0.001,
         'gamma': 0.95,
-        'learning_rate': 10**(-3),
+        'learning_rate': 10**(-7),
         'money': 10000,
         'obs_space': (8, 20),
-        'reward_function': 'compute_reward_from_tutor',
+        'reward_function': 'reward_differential_sharpe_ratio',
         'runs_p_eps': 5,
         'action_space': 4, # 4 for DQNTrainer
         'trainer': 'DQNTrainer', # DRLTrainer DQNTrainer
