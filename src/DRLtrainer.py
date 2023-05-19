@@ -90,7 +90,7 @@ class DRLLossFunctions(keras.losses.Loss):
         
         Notes
         -----
-        Function generates very high gradients, therefore we should use low learning rates
+        Function might generates very high gradients, therefore we should use low learning rates
         
         Parameters
         ----------
